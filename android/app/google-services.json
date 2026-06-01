@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "561779744124",
+    "project_id": "batanghenyo-9f4ac",
+    "storage_bucket": "batanghenyo-9f4ac.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:561779744124:android:850e34fda387d5e7d9d8f9",
+        "android_client_info": {
+          "package_name": "com.example.batanghenyo"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCeQNVutvGqgGclWcqecq27l9QyUwwnXbs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
