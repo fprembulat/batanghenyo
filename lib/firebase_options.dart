@@ -23,15 +23,9 @@ class DefaultFirebaseOptions {
       case TargetPlatform.android:
         return android;
       case TargetPlatform.iOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for ios - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return ios;
       case TargetPlatform.macOS:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for macos - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+        return macos;
       case TargetPlatform.windows:
         return windows;
       case TargetPlatform.linux:
@@ -73,4 +67,23 @@ class DefaultFirebaseOptions {
     storageBucket: 'batanghenyo-9f4ac.firebasestorage.app',
     measurementId: 'G-HPQY270CPN',
   );
+
+  static const FirebaseOptions macos = FirebaseOptions(
+    apiKey: 'AIzaSyBBpHz2n53ZzGhAYXo3-TDHXIQ-YHl9WYA',
+    appId: '1:561779744124:ios:9f6d0c0bfb2cc69cd9d8f9',
+    messagingSenderId: '561779744124',
+    projectId: 'batanghenyo-9f4ac',
+    storageBucket: 'batanghenyo-9f4ac.firebasestorage.app',
+    iosBundleId: 'com.example.batanghenyo',
+  );
+
+  static const FirebaseOptions ios = FirebaseOptions(
+    apiKey: 'AIzaSyBBpHz2n53ZzGhAYXo3-TDHXIQ-YHl9WYA',
+    appId: '1:561779744124:ios:9f6d0c0bfb2cc69cd9d8f9',
+    messagingSenderId: '561779744124',
+    projectId: 'batanghenyo-9f4ac',
+    storageBucket: 'batanghenyo-9f4ac.firebasestorage.app',
+    iosBundleId: 'com.example.batanghenyo',
+  );
+
 }

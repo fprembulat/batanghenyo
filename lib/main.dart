@@ -1,13 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
 import 'firebase_options.dart';
 import 'screens/dashboard_screen.dart';
+import 'services/firebase_service.dart';
 
 void main() async {
-  // Ensure Flutter engine bindings are ready before Firebase kicks in
+  // ensures flutter engine bindings are ready before firebase initialization
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Connect your app to your Firebase backend project shell
+  // initializes firebase backend for the current platform
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
@@ -20,17 +22,27 @@ class BatangHenyoApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'BatangHenyo OMR',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        useMaterial3: true,
-        colorScheme: ColorScheme.fromSeed(
-          seedColor: const Color(0xFF008080), // Deep Teal Theme
-          brightness: Brightness.light,
+    // wraps the application with multiprovider to inject services globally
+    return MultiProvider(
+      providers: [
+        Provider<FirebaseService>(
+          create: (BuildContext context) {
+            return FirebaseService();
+          },
         ),
+      ],
+      child: MaterialApp(
+        title: 'BatangHenyo OMR',
+        debugShowCheckedModeBanner: false,
+        theme: ThemeData(
+          useMaterial3: true,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: const Color(0xFF008080),
+            brightness: Brightness.light,
+          ),
+        ),
+        home: const DashboardScreen(),
       ),
-      home: const DashboardScreen(), // Launches your main dashboard screen on start
     );
   }
 }
