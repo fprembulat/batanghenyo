@@ -21,67 +21,99 @@ class StudentResult {
     required this.timestamp,
   });
 
-  // converts firebase document back to a flutter object with explicit null safety
+  // converts firebase document back to a flutter object with rigorous type safety boundaries
   factory StudentResult.fromFirestore(DocumentSnapshot doc) {
-    final Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    final Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
     
+    if (data == null) {
+      throw Exception('firestore document data is missing or null');
+    } else {
+      // proceeds with parsing the valid data payload
+    }
+
     final String parsedId = doc.id;
     
     final dynamic rawName = data['studentName'];
     String parsedName;
-    if (rawName != null) {
-      parsedName = rawName as String;
+    if (rawName is String) {
+      parsedName = rawName;
     } else {
-      parsedName = '';
+      parsedName = 'unknown student';
     }
 
     final dynamic rawSubject = data['subject'];
     String parsedSubject;
-    if (rawSubject != null) {
-      parsedSubject = rawSubject as String;
+    if (rawSubject is String) {
+      parsedSubject = rawSubject;
     } else {
-      parsedSubject = '';
+      parsedSubject = 'unknown subject';
     }
 
     final dynamic rawScore = data['score'];
     int parsedScore;
-    if (rawScore != null) {
-      parsedScore = rawScore as int;
+    if (rawScore is int) {
+      parsedScore = rawScore;
     } else {
-      parsedScore = 0;
+      if (rawScore is String) {
+        final int? convertedScore = int.tryParse(rawScore);
+        if (convertedScore != null) {
+          parsedScore = convertedScore;
+        } else {
+          parsedScore = 0;
+        }
+      } else {
+        parsedScore = 0;
+      }
     }
 
     final dynamic rawTotal = data['totalQuestions'];
     int parsedTotal;
-    if (rawTotal != null) {
-      parsedTotal = rawTotal as int;
+    if (rawTotal is int) {
+      parsedTotal = rawTotal;
     } else {
-      parsedTotal = 0;
+      if (rawTotal is String) {
+        final int? convertedTotal = int.tryParse(rawTotal);
+        if (convertedTotal != null) {
+          parsedTotal = convertedTotal;
+        } else {
+          parsedTotal = 0;
+        }
+      } else {
+        parsedTotal = 0;
+      }
     }
 
     final dynamic rawAnswers = data['studentAnswers'];
     List<int> parsedAnswers;
-    if (rawAnswers != null) {
-      parsedAnswers = List<int>.from(rawAnswers as List<dynamic>);
+    if (rawAnswers is List<dynamic>) {
+      parsedAnswers = List<int>.from(rawAnswers);
     } else {
       parsedAnswers = [];
     }
 
     final dynamic rawAnalysis = data['analysis'];
     List<bool> parsedAnalysis;
-    if (rawAnalysis != null) {
-      parsedAnalysis = List<bool>.from(rawAnalysis as List<dynamic>);
+    if (rawAnalysis is List<dynamic>) {
+      parsedAnalysis = List<bool>.from(rawAnalysis);
     } else {
       parsedAnalysis = [];
     }
 
     final dynamic rawTimestamp = data['timestamp'];
     DateTime parsedTimestamp;
-    if (rawTimestamp != null) {
-      final Timestamp firestoreTime = rawTimestamp as Timestamp;
-      parsedTimestamp = firestoreTime.toDate();
+    if (rawTimestamp is Timestamp) {
+      parsedTimestamp = rawTimestamp.toDate();
     } else {
-      parsedTimestamp = DateTime.now();
+      if (rawTimestamp is String) {
+        final DateTime? convertedTime = DateTime.tryParse(rawTimestamp);
+        if (convertedTime != null) {
+          parsedTimestamp = convertedTime;
+        } else {
+          parsedTimestamp = DateTime.now();
+        }
+      } else {
+        parsedTimestamp = DateTime.now();
+      }
     }
 
     final StudentResult result = StudentResult(

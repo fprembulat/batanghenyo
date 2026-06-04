@@ -32,6 +32,9 @@ dependencies:
   provider: ^6.1.5+1
   flutter_dotenv: ^6.0.1
 
+  # 🔥 Industry Standard Computer Vision Engine
+  opencv_dart: ^2.0.0
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
