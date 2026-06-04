@@ -1,10 +1,9 @@
 import 'dart:io';
 import 'dart:typed_data';
-import 'dart:math';
 import 'package:image/image.dart' as img;
 
 class OMRProcessor {
-  // processes the physical answer sheet utilizing a native bradley-roth adaptive thresholding algorithm
+  // processes the physical answer sheet utilizing dynamic bounding box geometry
   static List<int> processAnswerSheet(File imageFile, int totalQuestions) {
     final List<int> detectedAnswers = [];
     final List<int> bytes = imageFile.readAsBytesSync();
@@ -18,48 +17,98 @@ class OMRProcessor {
 
     final img.Image grayscale = img.grayscale(originalImage);
     
-    // scales the image down to 800 pixels wide to exponentially increase the thresholding processing speed
+    // scales the image down to standard width to exponentially increase thresholding speed
     final img.Image scaledImage = img.copyResize(grayscale, width: 800);
     
-    // applies the adaptive threshold to isolate dark pencil marks against glowing laptop screen backgrounds
-    final img.Image binaryImage = _applyAdaptiveThreshold(scaledImage, 100, 0.15);
+    // applies the adaptive threshold to isolate dark pencil marks against shadows and lighting variables
+    final img.Image binaryImage = _applyAdaptiveThreshold(scaledImage, 40, 15);
 
     final int width = binaryImage.width;
     final int height = binaryImage.height;
 
-    // restricts search exclusively to the outer fifteen percent margins to prevent locking onto header text
-    final double rawMarginX = width * 0.15;
-    final double rawMarginY = height * 0.15;
+    int minX = width;
+    int maxX = 0;
+    int minY = height;
+    int maxY = 0;
+
+    // ignores outer five percent of image to prevent desk boundaries from skewing layout
+    final double rawMarginX = width * 0.05;
+    final double rawMarginY = height * 0.05;
     final int marginX = rawMarginX.toInt();
     final int marginY = rawMarginY.toInt();
 
-    final int rightBoundaryStartX = width - marginX;
-    final int bottomBoundaryStartY = height - marginY;
+    // scans for the extreme edges of all text and bubbles to establish the core content box
+    for (int y = marginY; y < height - marginY; y++) {
+      for (int x = marginX; x < width - marginX; x++) {
+        final img.Pixel pixel = binaryImage.getPixel(x, y);
+        final num redChannel = pixel.r;
+        
+        if (redChannel > 128) {
+          if (x < minX) {
+            minX = x;
+          } else {
+            // keeps current min bound
+          }
+          
+          if (x > maxX) {
+            maxX = x;
+          } else {
+            // keeps current max bound
+          }
+          
+          if (y < minY) {
+            minY = y;
+          } else {
+            // keeps current min bound
+          }
+          
+          if (y > maxY) {
+            maxY = y;
+          } else {
+            // keeps current max bound
+          }
+        } else {
+          // ignores dark background pixels
+        }
+      }
+    }
 
-    // scans the thresholded image to find the exact coordinates of the four alignment squares
-    final Point<int> topLeft = _findDensestWhiteRegion(binaryImage, 0, marginX, 0, marginY);
-    final Point<int> topRight = _findDensestWhiteRegion(binaryImage, rightBoundaryStartX, width, 0, marginY);
-    final Point<int> bottomLeft = _findDensestWhiteRegion(binaryImage, 0, marginX, bottomBoundaryStartY, height);
-    final Point<int> bottomRight = _findDensestWhiteRegion(binaryImage, rightBoundaryStartX, width, bottomBoundaryStartY, height);
+    if (minX >= maxX) {
+      return detectedAnswers;
+    } else {
+      if (minY >= maxY) {
+        return detectedAnswers;
+      } else {
+        // valid bounding box located
+      }
+    }
 
-    // standardizes grid spacing against a virtual layout aligned to the physical document
-    final double targetWidth = 1200.0;
-    final double targetHeight = 1600.0;
+    // calculates relative grid boundaries based on the standard batanghenyo physical template
+    final double contentWidth = (maxX - minX).toDouble();
+    final double contentHeight = (maxY - minY).toDouble();
 
-    final double colWidth = targetWidth / 3.0;
-    final double headerOffset = targetHeight * 0.14;
-    final double bodyHeight = targetHeight * 0.86;
-    final double rowHeight = bodyHeight / 21.0;
+    // places grid starting point safely below the header text elements
+    final double gridStartYOffset = contentHeight * 0.17;
+    final double gridStartY = minY + gridStartYOffset;
+    final double gridHeight = contentHeight * 0.83;
     
-    final double numberOffset = colWidth * 0.15;
-    final double choiceAreaWidth = colWidth * 0.80;
-    final double choiceWidth = choiceAreaWidth / 5.0;
+    final double colWidth = contentWidth / 3.0;
+    final double rowHeight = gridHeight / 20.0;
 
     final int itemsPerColumn = 20;
     final int choicesPerQuestion = 5;
 
-    // iterates through the columns explicitly
+    // iterates through the 3 macro columns mapping the choice coordinates dynamically
     for (int col = 0; col < 3; col++) {
+      final double colStartXOffset = col * colWidth;
+      final double colStartX = minX + colStartXOffset;
+      
+      final double bubblesStartXOffset = colWidth * 0.18;
+      final double bubblesStartX = colStartX + bubblesStartXOffset;
+      
+      final double bubblesWidth = colWidth * 0.80;
+      final double choiceWidth = bubblesWidth / 5.0;
+      
       for (int row = 0; row < itemsPerColumn; row++) {
         final int currentQuestionNumber = (col * itemsPerColumn) + row;
         
@@ -70,78 +119,75 @@ class OMRProcessor {
           int highestWhitePixelCount = 0;
           int selectedChoice = -1;
           
-          final double startXOffset = (col * colWidth) + numberOffset;
-          final double startYOffset = headerOffset + (row * rowHeight);
+          final double boxStartYOffset = row * rowHeight;
+          final double boxStartY = gridStartY + boxStartYOffset;
 
           for (int c = 0; c < choicesPerQuestion; c++) {
+            final double boxStartXOffset = c * choiceWidth;
+            final double boxStartX = bubblesStartX + boxStartXOffset;
+
+            // shrinks sample box by thirty percent on all sides to isolate the deep bubble core
+            final double rawPaddingX = choiceWidth * 0.30;
+            final double rawPaddingY = rowHeight * 0.30;
+            final int paddingX = rawPaddingX.toInt();
+            final int paddingY = rawPaddingY.toInt();
+
+            final int boxStartXInt = boxStartX.toInt();
+            final int boxStartYInt = boxStartY.toInt();
+            final int boxEndXInt = (boxStartX + choiceWidth).toInt();
+            final int boxEndYInt = (boxStartY + rowHeight).toInt();
+
+            final int sampleStartX = boxStartXInt + paddingX;
+            final int sampleEndX = boxEndXInt - paddingX;
+            final int sampleStartY = boxStartYInt + paddingY;
+            final int sampleEndY = boxEndYInt - paddingY;
+
             int whitePixels = 0;
+            int totalSamplePixels = 0;
 
-            final double boxStartX = startXOffset + (c * choiceWidth);
-            final double boxStartY = startYOffset;
-            final double boxEndX = boxStartX + choiceWidth;
-            final double boxEndY = boxStartY + rowHeight;
-
-            final int startX = boxStartX.toInt();
-            final int startY = boxStartY.toInt();
-            final int endX = boxEndX.toInt();
-            final int endY = boxEndY.toInt();
-
-            // iterates pixel bounds stepping by 3 pixels to decrease scan times
-            for (int x = startX; x < endX; x = x + 3) {
-              for (int y = startY; y < endY; y = y + 3) {
-                final double xRatio = x / targetWidth;
-                final double yRatio = y / targetHeight;
-
-                final double topX = topLeft.x + (topRight.x - topLeft.x) * xRatio;
-                final double topY = topLeft.y + (topRight.y - topLeft.y) * xRatio;
-                final double bottomX = bottomLeft.x + (bottomRight.x - bottomLeft.x) * xRatio;
-                final double bottomY = bottomLeft.y + (bottomRight.y - bottomLeft.y) * xRatio;
-
-                final double sourceX = topX + (bottomX - topX) * yRatio;
-                final double sourceY = topY + (bottomY - topY) * yRatio;
-
-                final int sx = sourceX.toInt();
-                final int sy = sourceY.toInt();
-
-                if (sx >= 0) {
-                  if (sx < width) {
-                    if (sy >= 0) {
-                      if (sy < height) {
-                        final img.Pixel pixel = binaryImage.getPixel(sx, sy);
-                        final num redChannel = pixel.r;
+            // evaluates pixels exclusively inside the core to guarantee empty outlines return zero hits
+            for (int x = sampleStartX; x <= sampleEndX; x++) {
+              for (int y = sampleStartY; y <= sampleEndY; y++) {
+                totalSamplePixels = totalSamplePixels + 1;
+                
+                if (x >= 0) {
+                  if (x < width) {
+                    if (y >= 0) {
+                      if (y < height) {
+                        final img.Pixel corePixel = binaryImage.getPixel(x, y);
+                        final num coreLuminance = corePixel.r;
                         
-                        // evaluates against white pixels since the image was inverted during thresholding
-                        if (redChannel > 200) {
+                        if (coreLuminance > 128) {
                           whitePixels = whitePixels + 1;
                         } else {
-                          // skips dark pixel clusters explicitly
+                          // ignores empty core space
                         }
                       } else {
-                        // ignores invalid vertical pixel boundaries
+                        // ignores out of bounds vertical index
                       }
                     } else {
-                      // ignores invalid vertical pixel boundaries
+                      // ignores out of bounds vertical index
                     }
                   } else {
-                    // ignores invalid horizontal pixel boundaries
+                    // ignores out of bounds horizontal index
                   }
                 } else {
-                  // ignores invalid horizontal pixel boundaries
+                  // ignores out of bounds horizontal index
                 }
               }
             }
 
-            // registers the densest answer choice
+            // registers choice if the core density exceeds the baseline shading tolerance
             if (whitePixels > highestWhitePixelCount) {
-              // minimal threshold compensates for checking fewer pixels due to stepping
-              if (whitePixels > 5) {
+              final double toleranceLimit = totalSamplePixels * 0.15;
+              if (whitePixels > toleranceLimit) {
                 highestWhitePixelCount = whitePixels;
                 selectedChoice = c;
               } else {
-                // noise threshold not triggered
+                // insufficient shading intensity
               }
             } else {
-              // current choice is less dense
+              // choice is lighter than previously checked option
             }
           }
           
@@ -154,102 +200,110 @@ class OMRProcessor {
   }
 
   // executes the bradley-roth algorithm to dynamically evaluate local contrast explicitly
-  static img.Image _applyAdaptiveThreshold(img.Image grayscale, int windowSize, double threshold) {
+  static img.Image _applyAdaptiveThreshold(img.Image grayscale, int windowSize, int contrastThreshold) {
     final int width = grayscale.width;
     final int height = grayscale.height;
     
     final img.Image binaryImage = img.Image(width: width, height: height);
     final List<int> integralImage = List<int>.filled(width * height, 0);
 
-    // builds the integral image to allow rapid local contrast calculations
-    for (int x = 0; x < width; x++) {
+    // builds integral image matrix for rapid area sum calculations
+    for (int y = 0; y < height; y++) {
       int sum = 0;
-      for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
         final img.Pixel pixel = grayscale.getPixel(x, y);
         final int luminance = pixel.r.toInt();
         sum = sum + luminance;
         
-        if (x == 0) {
-          integralImage[y * width + x] = sum;
+        if (y == 0) {
+          final int index = y * width + x;
+          integralImage[index] = sum;
         } else {
-          final int previousColumnVal = integralImage[y * width + (x - 1)];
-          integralImage[y * width + x] = previousColumnVal + sum;
+          final int currentIndex = y * width + x;
+          final int previousRowIndex = (y - 1) * width + x;
+          final int previousRowVal = integralImage[previousRowIndex];
+          integralImage[currentIndex] = previousRowVal + sum;
         }
       }
     }
 
     final int halfWindow = windowSize ~/ 2;
 
-    // evaluates each pixel against its local neighborhood to determine if it is a dark mark
-    for (int x = 0; x < width; x++) {
-      for (int y = 0; y < height; y++) {
+    // evaluates local contrast for each pixel to isolate dark pencil marks from the background
+    for (int y = 0; y < height; y++) {
+      for (int x = 0; x < width; x++) {
         int rx1 = x - halfWindow;
         if (rx1 < 0) {
           rx1 = 0;
         } else {
-          // keeps current value
+          // keeps constrained coordinate
         }
         
         int rx2 = x + halfWindow;
         if (rx2 >= width) {
           rx2 = width - 1;
         } else {
-          // keeps current value
+          // keeps constrained coordinate
         }
         
         int ry1 = y - halfWindow;
         if (ry1 < 0) {
           ry1 = 0;
         } else {
-          // keeps current value
+          // keeps constrained coordinate
         }
         
         int ry2 = y + halfWindow;
         if (ry2 >= height) {
           ry2 = height - 1;
         } else {
-          // keeps current value
+          // keeps constrained coordinate
         }
 
-        final int count = (rx2 - rx1 + 1) * (ry2 - ry1 + 1);
+        final int boxWidth = rx2 - rx1 + 1;
+        final int boxHeight = ry2 - ry1 + 1;
+        final int count = boxWidth * boxHeight;
 
-        // fetches summed values from the integral matrix explicitly
-        final int sumBottomRight = integralImage[ry2 * width + rx2];
+        final int bottomRightIndex = ry2 * width + rx2;
+        final int sumBottomRight = integralImage[bottomRightIndex];
         
         int sumTopRight;
-        if (ry1 - 1 < 0) {
-          sumTopRight = 0;
+        if (ry1 > 0) {
+          final int topRightIndex = (ry1 - 1) * width + rx2;
+          sumTopRight = integralImage[topRightIndex];
         } else {
-          sumTopRight = integralImage[(ry1 - 1) * width + rx2];
+          sumTopRight = 0;
         }
         
         int sumBottomLeft;
-        if (rx1 - 1 < 0) {
-          sumBottomLeft = 0;
+        if (rx1 > 0) {
+          final int bottomLeftIndex = ry2 * width + (rx1 - 1);
+          sumBottomLeft = integralImage[bottomLeftIndex];
         } else {
-          sumBottomLeft = integralImage[ry2 * width + (rx1 - 1)];
+          sumBottomLeft = 0;
         }
         
         int sumTopLeft;
-        if (rx1 - 1 < 0) {
-          sumTopLeft = 0;
-        } else {
-          if (ry1 - 1 < 0) {
-            sumTopLeft = 0;
+        if (rx1 > 0) {
+          if (ry1 > 0) {
+            final int topLeftIndex = (ry1 - 1) * width + (rx1 - 1);
+            sumTopLeft = integralImage[topLeftIndex];
           } else {
-            sumTopLeft = integralImage[(ry1 - 1) * width + (rx1 - 1)];
+            sumTopLeft = 0;
           }
+        } else {
+          sumTopLeft = 0;
         }
 
         final int totalSum = sumBottomRight - sumTopRight - sumBottomLeft + sumTopLeft;
+        final int averageLuminance = totalSum ~/ count;
+        
         final img.Pixel currentPixel = grayscale.getPixel(x, y);
         final int currentLuminance = currentPixel.r.toInt();
+        final int limit = averageLuminance - contrastThreshold;
 
-        // inverts the result so that dark pencil marks become pure white pixels
-        final double limit = totalSum * (1.0 - threshold);
-        final int scaledLuminance = currentLuminance * count;
-        
-        if (scaledLuminance < limit) {
+        // assigns white to pixels significantly darker than their immediate surroundings
+        if (currentLuminance < limit) {
           binaryImage.setPixelRgba(x, y, 255, 255, 255, 255);
         } else {
           binaryImage.setPixelRgba(x, y, 0, 0, 0, 255);
@@ -258,68 +312,5 @@ class OMRProcessor {
     }
 
     return binaryImage;
-  }
-
-  // scans a specific restricted margin to locate the physical square marker explicitly
-  static Point<int> _findDensestWhiteRegion(img.Image imgData, int startX, int endX, int startY, int endY) {
-    int bestX = startX;
-    int bestY = startY;
-    int highestDensity = 0;
-
-    final int windowSize = 25;
-    
-    // ensures safe traversal away from raw image borders
-    final int maxSafeX = endX - windowSize;
-    final int maxSafeY = endY - windowSize;
-
-    final int imageWidth = imgData.width;
-    final int imageHeight = imgData.height;
-
-    for (int x = startX; x < maxSafeX; x = x + 10) {
-      for (int y = startY; y < maxSafeY; y = y + 10) {
-        int currentDensity = 0;
-
-        for (int wx = 0; wx < windowSize; wx = wx + 2) {
-          for (int wy = 0; wy < windowSize; wy = wy + 2) {
-            final int checkX = x + wx;
-            final int checkY = y + wy;
-            
-            if (checkX < imageWidth) {
-              if (checkY < imageHeight) {
-                final img.Pixel pixel = imgData.getPixel(checkX, checkY);
-                final num redChannel = pixel.r;
-
-                // targets the pure white pixels generated by the adaptive thresholding
-                if (redChannel > 200) {
-                  currentDensity = currentDensity + 1;
-                } else {
-                  // skips counting dark shades
-                }
-              } else {
-                // handles outer edge overlaps
-              }
-            } else {
-              // handles outer edge overlaps
-            }
-          }
-        }
-
-        if (currentDensity > highestDensity) {
-          highestDensity = currentDensity;
-          
-          final int halfWindow = windowSize ~/ 2;
-          final int centerX = x + halfWindow;
-          final int centerY = y + halfWindow;
-          
-          bestX = centerX;
-          bestY = centerY;
-        } else {
-          // maintains current highest coordinate
-        }
-      }
-    }
-
-    final Point<int> resultPoint = Point<int>(bestX, bestY);
-    return resultPoint;
   }
 }
