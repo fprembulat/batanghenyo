@@ -85,4 +85,12 @@ class FirebaseService {
     final CollectionReference collectionRef = _db.collection('quiz_settings');
     return collectionRef.snapshots();
   }
+
+  // deletes a specific student result explicitly using the document id
+  Future<void> deleteStudentResult(String documentId) async {
+    final CollectionReference collectionRef = _db.collection('student_results');
+    final DocumentReference docRef = collectionRef.doc(documentId);
+    
+    await docRef.delete();
+  }
 }

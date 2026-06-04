@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firebase_service.dart';
 import 'create_exam_screen.dart';
+import 'exam_detail_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -69,8 +70,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   ),
                   trailing: const Icon(Icons.arrow_forward_ios),
                   onTap: () {
-                    // routes to exam detail screen in phase 3
-                    debugPrint('routing to $subjectName details');
+                    final MaterialPageRoute route = MaterialPageRoute(
+                      builder: (BuildContext context) {
+                        return ExamDetailScreen(
+                          examTitle: subjectName,
+                        );
+                      },
+                    );
+                    Navigator.push(context, route);
                   },
                 ),
               );
