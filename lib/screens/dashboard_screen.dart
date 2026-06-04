@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../services/firebase_service.dart';
+import 'create_exam_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -79,8 +80,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // routes to create exam screen in phase 2
-          debugPrint('routing to create exam');
+          final MaterialPageRoute route = MaterialPageRoute(
+            builder: (BuildContext context) {
+              return const CreateExamScreen();
+            },
+          );
+          Navigator.push(context, route);
         },
         child: const Icon(Icons.add),
       ),
