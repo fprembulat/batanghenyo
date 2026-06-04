@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'firebase_options.dart';
 import 'screens/dashboard_screen.dart';
 import 'services/firebase_service.dart';
@@ -9,6 +10,9 @@ void main() async {
   // ensures flutter engine bindings are ready before firebase initialization
   WidgetsFlutterBinding.ensureInitialized();
   
+  // loads the environment variables from the .env file
+  await dotenv.load(fileName: ".env");
+
   // initializes firebase backend for the current platform
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
