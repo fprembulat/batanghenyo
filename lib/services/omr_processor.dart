@@ -1,64 +1,197 @@
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:math';
 import 'package:image/image.dart' as img;
 
 class OMRProcessor {
-  /// Analyzes a scanned photo to determine which choices were filled in.
-  /// returns a list of integers representing choices (0=A, 1=B, 2=C, 3=D)
-  static List<int> processAnswerSheet(File imageFile, int totalQuestions, int choicesPerQuestion) {
-    List<int> detectedAnswers = [];
+  // processes the physical answer sheet using native corner detection and perspective warping
+  static List<int> processAnswerSheet(File imageFile, int totalQuestions) {
+    final List<int> detectedAnswers = [];
+    final List<int> bytes = imageFile.readAsBytesSync();
+    final img.Image? originalImage = img.decodeImage(Uint8List.fromList(bytes));
     
-    // 1. Read the raw file bytes and decode into an image object
-    List<int> bytes = imageFile.readAsBytesSync();
-    img.Image? originalImage = img.decodeImage(Uint8List.fromList(bytes));
-    if (originalImage == null) return [];
+    if (originalImage == null) {
+      return detectedAnswers;
+    } else {
+      // continues processing since image is valid
+    }
 
-    // 2. Turn the image grayscale to eliminate color bias (lighting artifacts)
-    img.Image grayscale = img.grayscale(originalImage);
-    
-    int width = grayscale.width;
-    int height = grayscale.height;
+    final img.Image grayscale = img.grayscale(originalImage);
+    final int width = grayscale.width;
+    final int height = grayscale.height;
 
-    // 3. Math to establish the boundaries of each option grid
-    double rowHeight = height / totalQuestions;
-    double colWidth = width / choicesPerQuestion;
+    // defines boundaries for corner scanning explicitly
+    final int midX = width ~/ 2;
+    final int midY = height ~/ 2;
 
-    // 4. Scan through every row (question) and column (choice)
-    for (int q = 0; q < totalQuestions; q++) {
-      int highestDarkPixelCount = 0;
-      int selectedChoice = -1; // -1 means blank/no answer detected
+    // locates the 4 fiducial markers by scanning each quadrant for the darkest pixel mass
+    final Point<int> topLeft = _findDarkestRegion(grayscale, 0, midX, 0, midY);
+    final Point<int> topRight = _findDarkestRegion(grayscale, midX, width, 0, midY);
+    final Point<int> bottomLeft = _findDarkestRegion(grayscale, 0, midX, midY, height);
+    final Point<int> bottomRight = _findDarkestRegion(grayscale, midX, width, midY, height);
 
-      for (int c = 0; c < choicesPerQuestion; c++) {
-        int darkPixels = 0;
+    // creates a flattened standardized canvas to project the warped image onto
+    final int targetWidth = 1200;
+    final int targetHeight = 1600;
+    final img.Image warpedImage = img.Image(width: targetWidth, height: targetHeight);
 
-        // Calculate bounding coordinates for this specific bubble zone
-        int startX = (c * colWidth).toInt();
-        int startY = (q * rowHeight).toInt();
-        int endX = ((c + 1) * colWidth).toInt();
-        int endY = ((q + 1) * rowHeight).toInt();
+    // applies native perspective warp mapping from the detected corners to the target canvas
+    _applyPerspectiveWarp(
+      source: grayscale,
+      target: warpedImage,
+      tl: topLeft,
+      tr: topRight,
+      bl: bottomLeft,
+      br: bottomRight,
+    );
 
-        // Loop over individual pixels within the specific bubble boundary box
-        for (int x = startX; x < endX; x++) {
-          for (int y = startY; y < endY; y++) {
-            var pixel = grayscale.getPixel(x, y);
-            
-            // In the 'image' package, we look at the red channel value 
-            // since grayscale makes r, g, and b identical. (0 is pure black, 255 is pure white)
-            if (pixel.r < 110) { 
-              darkPixels++;
+    // establishes the physical boundaries of the 3-column answer grid
+    final double columnWidth = targetWidth / 3.0;
+    final double rowHeight = targetHeight / 22.0; 
+    final int itemsPerColumn = 20;
+    final int choicesPerQuestion = 5;
+
+    // iterates through the 3 macro-columns of the answer sheet
+    for (int col = 0; col < 3; col++) {
+      // iterates through the 20 rows within the current column
+      for (int row = 0; row < itemsPerColumn; row++) {
+        final int currentQuestionNumber = (col * itemsPerColumn) + row;
+        
+        if (currentQuestionNumber >= totalQuestions) {
+          // breaks early if the maximum configured questions are reached
+          break;
+        } else {
+          int highestDarkPixelCount = 0;
+          int selectedChoice = -1;
+          
+          final double choiceWidth = columnWidth / (choicesPerQuestion + 1);
+          final double startXOffset = col * columnWidth + choiceWidth; 
+          final double startYOffset = (row + 1) * rowHeight; 
+
+          // iterates through choices a to e explicitly
+          for (int c = 0; c < choicesPerQuestion; c++) {
+            int darkPixels = 0;
+
+            final int startX = (startXOffset + (c * choiceWidth)).toInt();
+            final int startY = startYOffset.toInt();
+            final int endX = (startX + choiceWidth).toInt();
+            final int endY = (startY + rowHeight).toInt();
+
+            for (int x = startX; x < endX; x++) {
+              for (int y = startY; y < endY; y++) {
+                if (x < targetWidth) {
+                  if (y < targetHeight) {
+                    final img.Pixel pixel = warpedImage.getPixel(x, y);
+                    final num redChannel = pixel.r;
+                    
+                    if (redChannel < 100) {
+                      darkPixels = darkPixels + 1;
+                    } else {
+                      // skips lighter pixels
+                    }
+                  } else {
+                    // skips out of bounds vertically
+                  }
+                } else {
+                  // skips out of bounds horizontally
+                }
+              }
+            }
+
+            // evaluates if the current choice has the highest density of pencil marks
+            if (darkPixels > highestDarkPixelCount) {
+              if (darkPixels > 30) {
+                highestDarkPixelCount = darkPixels;
+                selectedChoice = c;
+              } else {
+                // noise threshold not met
+              }
+            } else {
+              // current choice is lighter than previous
             }
           }
-        }
-
-        // The bubble with the highest concentration of dark pencil/pen strokes wins
-        if (darkPixels > highestDarkPixelCount && darkPixels > 40) { 
-          highestDarkPixelCount = darkPixels;
-          selectedChoice = c; 
+          
+          detectedAnswers.add(selectedChoice);
         }
       }
-      detectedAnswers.add(selectedChoice);
     }
 
     return detectedAnswers;
+  }
+
+  // scans a specific quadrant to find the densest dark marker explicitly
+  static Point<int> _findDarkestRegion(img.Image imgData, int startX, int endX, int startY, int endY) {
+    int bestX = startX;
+    int bestY = startY;
+    num lowestLuminance = 255;
+
+    for (int x = startX; x < endX; x = x + 5) {
+      for (int y = startY; y < endY; y = y + 5) {
+        final img.Pixel pixel = imgData.getPixel(x, y);
+        final num luminance = pixel.r;
+        
+        if (luminance < lowestLuminance) {
+          lowestLuminance = luminance;
+          bestX = x;
+          bestY = y;
+        } else {
+          // continues searching
+        }
+      }
+    }
+    
+    final Point<int> resultPoint = Point<int>(bestX, bestY);
+    return resultPoint;
+  }
+
+  // maps the skewed source image to the flat target image using bilinear logic
+  static void _applyPerspectiveWarp({
+    required img.Image source,
+    required img.Image target,
+    required Point<int> tl,
+    required Point<int> tr,
+    required Point<int> bl,
+    required Point<int> br,
+  }) {
+    final int tWidth = target.width;
+    final int tHeight = target.height;
+
+    for (int ty = 0; ty < tHeight; ty++) {
+      for (int tx = 0; tx < tWidth; tx++) {
+        final double xRatio = tx / tWidth;
+        final double yRatio = ty / tHeight;
+
+        // computes inverse mapping explicitly
+        final double topX = tl.x + (tr.x - tl.x) * xRatio;
+        final double topY = tl.y + (tr.y - tl.y) * xRatio;
+        final double bottomX = bl.x + (br.x - bl.x) * xRatio;
+        final double bottomY = bl.y + (br.y - bl.y) * xRatio;
+
+        final double sourceX = topX + (bottomX - topX) * yRatio;
+        final double sourceY = topY + (bottomY - topY) * yRatio;
+
+        final int sx = sourceX.toInt();
+        final int sy = sourceY.toInt();
+
+        if (sx >= 0) {
+          if (sx < source.width) {
+            if (sy >= 0) {
+              if (sy < source.height) {
+                final img.Pixel sourcePixel = source.getPixel(sx, sy);
+                target.setPixel(tx, ty, sourcePixel);
+              } else {
+                // out of bounds
+              }
+            } else {
+              // out of bounds
+            }
+          } else {
+            // out of bounds
+          }
+        } else {
+          // out of bounds
+        }
+      }
+    }
   }
 }
