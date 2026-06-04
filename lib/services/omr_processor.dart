@@ -2,32 +2,67 @@ import 'dart:io';
 import 'dart:typed_data';
 import 'dart:math';
 import 'package:image/image.dart' as img;
+import 'package:opencv_dart/opencv_dart.dart' as cv;
 
 class OMRProcessor {
-  // processes the physical answer sheet using mathematical coordinate mapping instead of memory-heavy warping
+  // processes the physical answer sheet using opencv for glare removal and native math for coordinate mapping
   static List<int> processAnswerSheet(File imageFile, int totalQuestions) {
     final List<int> detectedAnswers = [];
-    final List<int> bytes = imageFile.readAsBytesSync();
-    final img.Image? originalImage = img.decodeImage(Uint8List.fromList(bytes));
+    final String imagePath = imageFile.path;
     
-    if (originalImage == null) {
+    // loads the image file directly into opencv as a grayscale matrix bypassing standard decoding
+    final cv.Mat cvImage = cv.imread(imagePath, flags: 0);
+    
+    final bool isEmpty = cvImage.isEmpty;
+    if (isEmpty == true) {
       return detectedAnswers;
     } else {
-      // continues processing since image is valid
+      // image loaded successfully, proceeding with processing
     }
 
-    final img.Image grayscale = img.grayscale(originalImage);
-    final int width = grayscale.width;
-    final int height = grayscale.height;
+    // applies gaussian blur to neutralize monitor moire interference
+    final cv.Mat blurredImage = cv.gaussianBlur(cvImage, (7, 7), 0.0, sigmaY: 0.0);
+    
+    // applies adaptive thresholding to convert image to pure black and white, ignoring screen glare
+    // utilizes binary inverse so that the dark pencil marks and markers become solid white pixels
+    final cv.Mat thresholdImage = cv.adaptiveThreshold(blurredImage, 255.0, 1, 1, 51, 10.0);
+
+    // encodes the processed matrix back to standard bytes explicitly for native dart manipulation
+    final dynamic recordResult = cv.imencode('.png', thresholdImage);
+    final bool success = recordResult.$1;
+    final Uint8List processedBytes = recordResult.$2;
+
+    if (success == false) {
+      return detectedAnswers;
+    } else {
+      // encoding successful, proceeding with native manipulation
+    }
+
+    final img.Image? cleanImage = img.decodeImage(processedBytes);
+
+    if (cleanImage == null) {
+      return detectedAnswers;
+    } else {
+      // image decoded successfully, proceeding to map coordinates
+    }
+
+    final int width = cleanImage.width;
+    final int height = cleanImage.height;
 
     // restricts search exclusively to the outer fifteen percent margins to prevent locking onto header text
-    final int marginX = (width * 0.15).toInt();
-    final int marginY = (height * 0.15).toInt();
+    final double rawMarginX = width * 0.15;
+    final double rawMarginY = height * 0.15;
+    final int marginX = rawMarginX.toInt();
+    final int marginY = rawMarginY.toInt();
 
-    final Point<int> topLeft = _findDarkestRegion(grayscale, 0, marginX, 0, marginY);
-    final Point<int> topRight = _findDarkestRegion(grayscale, width - marginX, width, 0, marginY);
-    final Point<int> bottomLeft = _findDarkestRegion(grayscale, 0, marginX, height - marginY, height);
-    final Point<int> bottomRight = _findDarkestRegion(grayscale, width - marginX, width, height - marginY, height);
+    final int rightBoundaryStartX = width - marginX;
+    final int bottomBoundaryStartY = height - marginY;
+
+    // scans the thresholded image to find the exact coordinates of the four white alignment squares
+    final Point<int> topLeft = _findDensestWhiteRegion(cleanImage, 0, marginX, 0, marginY);
+    final Point<int> topRight = _findDensestWhiteRegion(cleanImage, rightBoundaryStartX, width, 0, marginY);
+    final Point<int> bottomLeft = _findDensestWhiteRegion(cleanImage, 0, marginX, bottomBoundaryStartY, height);
+    final Point<int> bottomRight = _findDensestWhiteRegion(cleanImage, rightBoundaryStartX, width, bottomBoundaryStartY, height);
 
     // standardizes grid spacing against a virtual layout aligned to the physical document
     final double targetWidth = 1200.0;
@@ -54,14 +89,14 @@ class OMRProcessor {
           // breaks early if the defined exam length is reached
           break;
         } else {
-          int highestDarkPixelCount = 0;
+          int highestWhitePixelCount = 0;
           int selectedChoice = -1;
           
           final double startXOffset = (col * colWidth) + numberOffset;
           final double startYOffset = headerOffset + (row * rowHeight);
 
           for (int c = 0; c < choicesPerQuestion; c++) {
-            int darkPixels = 0;
+            int whitePixels = 0;
 
             final double boxStartX = startXOffset + (c * choiceWidth);
             final double boxStartY = startYOffset;
@@ -94,13 +129,14 @@ class OMRProcessor {
                   if (sx < width) {
                     if (sy >= 0) {
                       if (sy < height) {
-                        final img.Pixel pixel = grayscale.getPixel(sx, sy);
-                        final num luminance = pixel.r;
+                        final img.Pixel pixel = cleanImage.getPixel(sx, sy);
+                        final num redChannel = pixel.r;
                         
-                        if (luminance < 110) {
-                          darkPixels = darkPixels + 1;
+                        // evaluates against white pixels since the image was inverted during thresholding
+                        if (redChannel > 200) {
+                          whitePixels = whitePixels + 1;
                         } else {
-                          // skips light pixel clusters explicitly
+                          // skips dark pixel clusters explicitly
                         }
                       } else {
                         // ignores invalid vertical pixel boundaries
@@ -118,16 +154,16 @@ class OMRProcessor {
             }
 
             // registers the densest answer choice
-            if (darkPixels > highestDarkPixelCount) {
-              // lowered threshold compensates for checking fewer pixels due to stepping
-              if (darkPixels > 5) {
-                highestDarkPixelCount = darkPixels;
+            if (whitePixels > highestWhitePixelCount) {
+              // minimal threshold compensates for checking fewer pixels due to stepping
+              if (whitePixels > 5) {
+                highestWhitePixelCount = whitePixels;
                 selectedChoice = c;
               } else {
                 // noise threshold not triggered
               }
             } else {
-              // current choice is lighter
+              // current choice is less dense
             }
           }
           
@@ -139,8 +175,8 @@ class OMRProcessor {
     return detectedAnswers;
   }
 
-  // scans a specific restricted margin to locate the physical square marker
-  static Point<int> _findDarkestRegion(img.Image imgData, int startX, int endX, int startY, int endY) {
+  // scans a specific restricted margin to locate the physical square marker explicitly
+  static Point<int> _findDensestWhiteRegion(img.Image imgData, int startX, int endX, int startY, int endY) {
     int bestX = startX;
     int bestY = startY;
     int highestDensity = 0;
@@ -151,6 +187,9 @@ class OMRProcessor {
     final int maxSafeX = endX - windowSize;
     final int maxSafeY = endY - windowSize;
 
+    final int imageWidth = imgData.width;
+    final int imageHeight = imgData.height;
+
     for (int x = startX; x < maxSafeX; x = x + 10) {
       for (int y = startY; y < maxSafeY; y = y + 10) {
         int currentDensity = 0;
@@ -160,15 +199,16 @@ class OMRProcessor {
             final int checkX = x + wx;
             final int checkY = y + wy;
             
-            if (checkX < imgData.width) {
-              if (checkY < imgData.height) {
+            if (checkX < imageWidth) {
+              if (checkY < imageHeight) {
                 final img.Pixel pixel = imgData.getPixel(checkX, checkY);
-                final num luminance = pixel.r;
+                final num redChannel = pixel.r;
 
-                if (luminance < 80) {
+                // targets the pure white pixels generated by the adaptive thresholding
+                if (redChannel > 200) {
                   currentDensity = currentDensity + 1;
                 } else {
-                  // skips counting lighter shades
+                  // skips counting dark shades
                 }
               } else {
                 // handles outer edge overlaps
@@ -181,8 +221,11 @@ class OMRProcessor {
 
         if (currentDensity > highestDensity) {
           highestDensity = currentDensity;
-          final int centerX = x + (windowSize ~/ 2);
-          final int centerY = y + (windowSize ~/ 2);
+          
+          final int halfWindow = windowSize ~/ 2;
+          final int centerX = x + halfWindow;
+          final int centerY = y + halfWindow;
+          
           bestX = centerX;
           bestY = centerY;
         } else {

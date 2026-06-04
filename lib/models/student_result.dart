@@ -23,14 +23,15 @@ class StudentResult {
 
   // converts firebase document back to a flutter object with rigorous type safety boundaries
   factory StudentResult.fromFirestore(DocumentSnapshot doc) {
-    final Map<String, dynamic>? data = doc.data() as Map<String, dynamic>?;
+    final dynamic rawData = doc.data();
     
-    if (data == null) {
+    if (rawData == null) {
       throw Exception('firestore document data is missing or null');
     } else {
       // proceeds with parsing the valid data payload
     }
 
+    final Map<String, dynamic> data = rawData as Map<String, dynamic>;
     final String parsedId = doc.id;
     
     final dynamic rawName = data['studentName'];
