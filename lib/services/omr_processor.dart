@@ -4,7 +4,7 @@ import 'dart:math';
 import 'package:image/image.dart' as img;
 
 class OMRProcessor {
-  // processes the physical answer sheet using native corner detection and perspective warping
+  // processes the physical answer sheet using mathematical coordinate mapping instead of memory-heavy warping
   static List<int> processAnswerSheet(File imageFile, int totalQuestions) {
     final List<int> detectedAnswers = [];
     final List<int> bytes = imageFile.readAsBytesSync();
@@ -20,94 +20,114 @@ class OMRProcessor {
     final int width = grayscale.width;
     final int height = grayscale.height;
 
-    // defines boundaries for corner scanning explicitly
-    final int midX = width ~/ 2;
-    final int midY = height ~/ 2;
+    // restricts search exclusively to the outer fifteen percent margins to prevent locking onto header text
+    final int marginX = (width * 0.15).toInt();
+    final int marginY = (height * 0.15).toInt();
 
-    // locates the 4 fiducial markers by scanning each quadrant for the darkest pixel mass
-    final Point<int> topLeft = _findDarkestRegion(grayscale, 0, midX, 0, midY);
-    final Point<int> topRight = _findDarkestRegion(grayscale, midX, width, 0, midY);
-    final Point<int> bottomLeft = _findDarkestRegion(grayscale, 0, midX, midY, height);
-    final Point<int> bottomRight = _findDarkestRegion(grayscale, midX, width, midY, height);
+    final Point<int> topLeft = _findDarkestRegion(grayscale, 0, marginX, 0, marginY);
+    final Point<int> topRight = _findDarkestRegion(grayscale, width - marginX, width, 0, marginY);
+    final Point<int> bottomLeft = _findDarkestRegion(grayscale, 0, marginX, height - marginY, height);
+    final Point<int> bottomRight = _findDarkestRegion(grayscale, width - marginX, width, height - marginY, height);
 
-    // creates a flattened standardized canvas to project the warped image onto
-    final int targetWidth = 1200;
-    final int targetHeight = 1600;
-    final img.Image warpedImage = img.Image(width: targetWidth, height: targetHeight);
+    // standardizes grid spacing against a virtual layout aligned to the physical document
+    final double targetWidth = 1200.0;
+    final double targetHeight = 1600.0;
 
-    // applies native perspective warp mapping from the detected corners to the target canvas
-    _applyPerspectiveWarp(
-      source: grayscale,
-      target: warpedImage,
-      tl: topLeft,
-      tr: topRight,
-      bl: bottomLeft,
-      br: bottomRight,
-    );
+    final double colWidth = targetWidth / 3.0;
+    final double headerOffset = targetHeight * 0.14;
+    final double bodyHeight = targetHeight * 0.86;
+    final double rowHeight = bodyHeight / 21.0;
+    
+    final double numberOffset = colWidth * 0.15;
+    final double choiceAreaWidth = colWidth * 0.80;
+    final double choiceWidth = choiceAreaWidth / 5.0;
 
-    // establishes the physical boundaries of the 3-column answer grid
-    final double columnWidth = targetWidth / 3.0;
-    final double rowHeight = targetHeight / 22.0; 
     final int itemsPerColumn = 20;
     final int choicesPerQuestion = 5;
 
-    // iterates through the 3 macro-columns of the answer sheet
+    // iterates through the columns explicitly
     for (int col = 0; col < 3; col++) {
-      // iterates through the 20 rows within the current column
       for (int row = 0; row < itemsPerColumn; row++) {
         final int currentQuestionNumber = (col * itemsPerColumn) + row;
         
         if (currentQuestionNumber >= totalQuestions) {
-          // breaks early if the maximum configured questions are reached
+          // breaks early if the defined exam length is reached
           break;
         } else {
           int highestDarkPixelCount = 0;
           int selectedChoice = -1;
           
-          final double choiceWidth = columnWidth / (choicesPerQuestion + 1);
-          final double startXOffset = col * columnWidth + choiceWidth; 
-          final double startYOffset = (row + 1) * rowHeight; 
+          final double startXOffset = (col * colWidth) + numberOffset;
+          final double startYOffset = headerOffset + (row * rowHeight);
 
-          // iterates through choices a to e explicitly
           for (int c = 0; c < choicesPerQuestion; c++) {
             int darkPixels = 0;
 
-            final int startX = (startXOffset + (c * choiceWidth)).toInt();
-            final int startY = startYOffset.toInt();
-            final int endX = (startX + choiceWidth).toInt();
-            final int endY = (startY + rowHeight).toInt();
+            final double boxStartX = startXOffset + (c * choiceWidth);
+            final double boxStartY = startYOffset;
+            final double boxEndX = boxStartX + choiceWidth;
+            final double boxEndY = boxStartY + rowHeight;
 
-            for (int x = startX; x < endX; x++) {
-              for (int y = startY; y < endY; y++) {
-                if (x < targetWidth) {
-                  if (y < targetHeight) {
-                    final img.Pixel pixel = warpedImage.getPixel(x, y);
-                    final num redChannel = pixel.r;
-                    
-                    if (redChannel < 100) {
-                      darkPixels = darkPixels + 1;
+            final int startX = boxStartX.toInt();
+            final int startY = boxStartY.toInt();
+            final int endX = boxEndX.toInt();
+            final int endY = boxEndY.toInt();
+
+            // iterates pixel bounds, stepping by 3 pixels to exponentially decrease scan times
+            for (int x = startX; x < endX; x = x + 3) {
+              for (int y = startY; y < endY; y = y + 3) {
+                final double xRatio = x / targetWidth;
+                final double yRatio = y / targetHeight;
+
+                final double topX = topLeft.x + (topRight.x - topLeft.x) * xRatio;
+                final double topY = topLeft.y + (topRight.y - topLeft.y) * xRatio;
+                final double bottomX = bottomLeft.x + (bottomRight.x - bottomLeft.x) * xRatio;
+                final double bottomY = bottomLeft.y + (bottomRight.y - bottomLeft.y) * xRatio;
+
+                final double sourceX = topX + (bottomX - topX) * yRatio;
+                final double sourceY = topY + (bottomY - topY) * yRatio;
+
+                final int sx = sourceX.toInt();
+                final int sy = sourceY.toInt();
+
+                if (sx >= 0) {
+                  if (sx < width) {
+                    if (sy >= 0) {
+                      if (sy < height) {
+                        final img.Pixel pixel = grayscale.getPixel(sx, sy);
+                        final num luminance = pixel.r;
+                        
+                        if (luminance < 110) {
+                          darkPixels = darkPixels + 1;
+                        } else {
+                          // skips light pixel clusters explicitly
+                        }
+                      } else {
+                        // ignores invalid vertical pixel boundaries
+                      }
                     } else {
-                      // skips lighter pixels
+                      // ignores invalid vertical pixel boundaries
                     }
                   } else {
-                    // skips out of bounds vertically
+                    // ignores invalid horizontal pixel boundaries
                   }
                 } else {
-                  // skips out of bounds horizontally
+                  // ignores invalid horizontal pixel boundaries
                 }
               }
             }
 
-            // evaluates if the current choice has the highest density of pencil marks
+            // registers the densest answer choice
             if (darkPixels > highestDarkPixelCount) {
-              if (darkPixels > 30) {
+              // lowered threshold compensates for checking fewer pixels due to stepping
+              if (darkPixels > 5) {
                 highestDarkPixelCount = darkPixels;
                 selectedChoice = c;
               } else {
-                // noise threshold not met
+                // noise threshold not triggered
               }
             } else {
-              // current choice is lighter than previous
+              // current choice is lighter
             }
           }
           
@@ -119,79 +139,59 @@ class OMRProcessor {
     return detectedAnswers;
   }
 
-  // scans a specific quadrant to find the densest dark marker explicitly
+  // scans a specific restricted margin to locate the physical square marker
   static Point<int> _findDarkestRegion(img.Image imgData, int startX, int endX, int startY, int endY) {
     int bestX = startX;
     int bestY = startY;
-    num lowestLuminance = 255;
+    int highestDensity = 0;
 
-    for (int x = startX; x < endX; x = x + 5) {
-      for (int y = startY; y < endY; y = y + 5) {
-        final img.Pixel pixel = imgData.getPixel(x, y);
-        final num luminance = pixel.r;
-        
-        if (luminance < lowestLuminance) {
-          lowestLuminance = luminance;
-          bestX = x;
-          bestY = y;
-        } else {
-          // continues searching
-        }
-      }
-    }
+    final int windowSize = 25;
     
-    final Point<int> resultPoint = Point<int>(bestX, bestY);
-    return resultPoint;
-  }
+    // ensures safe traversal away from raw image borders
+    final int maxSafeX = endX - windowSize;
+    final int maxSafeY = endY - windowSize;
 
-  // maps the skewed source image to the flat target image using bilinear logic
-  static void _applyPerspectiveWarp({
-    required img.Image source,
-    required img.Image target,
-    required Point<int> tl,
-    required Point<int> tr,
-    required Point<int> bl,
-    required Point<int> br,
-  }) {
-    final int tWidth = target.width;
-    final int tHeight = target.height;
+    for (int x = startX; x < maxSafeX; x = x + 10) {
+      for (int y = startY; y < maxSafeY; y = y + 10) {
+        int currentDensity = 0;
 
-    for (int ty = 0; ty < tHeight; ty++) {
-      for (int tx = 0; tx < tWidth; tx++) {
-        final double xRatio = tx / tWidth;
-        final double yRatio = ty / tHeight;
+        for (int wx = 0; wx < windowSize; wx = wx + 2) {
+          for (int wy = 0; wy < windowSize; wy = wy + 2) {
+            final int checkX = x + wx;
+            final int checkY = y + wy;
+            
+            if (checkX < imgData.width) {
+              if (checkY < imgData.height) {
+                final img.Pixel pixel = imgData.getPixel(checkX, checkY);
+                final num luminance = pixel.r;
 
-        // computes inverse mapping explicitly
-        final double topX = tl.x + (tr.x - tl.x) * xRatio;
-        final double topY = tl.y + (tr.y - tl.y) * xRatio;
-        final double bottomX = bl.x + (br.x - bl.x) * xRatio;
-        final double bottomY = bl.y + (br.y - bl.y) * xRatio;
-
-        final double sourceX = topX + (bottomX - topX) * yRatio;
-        final double sourceY = topY + (bottomY - topY) * yRatio;
-
-        final int sx = sourceX.toInt();
-        final int sy = sourceY.toInt();
-
-        if (sx >= 0) {
-          if (sx < source.width) {
-            if (sy >= 0) {
-              if (sy < source.height) {
-                final img.Pixel sourcePixel = source.getPixel(sx, sy);
-                target.setPixel(tx, ty, sourcePixel);
+                if (luminance < 80) {
+                  currentDensity = currentDensity + 1;
+                } else {
+                  // skips counting lighter shades
+                }
               } else {
-                // out of bounds
+                // handles outer edge overlaps
               }
             } else {
-              // out of bounds
+              // handles outer edge overlaps
             }
-          } else {
-            // out of bounds
           }
+        }
+
+        if (currentDensity > highestDensity) {
+          highestDensity = currentDensity;
+          final int centerX = x + (windowSize ~/ 2);
+          final int centerY = y + (windowSize ~/ 2);
+          bestX = centerX;
+          bestY = centerY;
         } else {
-          // out of bounds
+          // maintains current highest coordinate
         }
       }
     }
+
+    final Point<int> resultPoint = Point<int>(bestX, bestY);
+    return resultPoint;
   }
 }
