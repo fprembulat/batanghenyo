@@ -93,4 +93,13 @@ class FirebaseService {
     
     await docRef.delete();
   }
+
+  // updates an existing student result in firestore explicitly
+  Future<void> updateStudentResult(StudentResult result) async {
+    final CollectionReference collectionRef = _db.collection('student_results');
+    final DocumentReference docRef = collectionRef.doc(result.id);
+    final Map<String, dynamic> dataPayload = result.toMap();
+
+    await docRef.update(dataPayload);
+  }
 }
