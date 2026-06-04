@@ -21,31 +21,97 @@ class StudentResult {
     required this.timestamp,
   });
 
-  // Convert Firebase document back to a Flutter Object
+  // converts firebase document back to a flutter object with explicit null safety
   factory StudentResult.fromFirestore(DocumentSnapshot doc) {
-    Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
-    return StudentResult(
-      id: doc.id,
-      studentName: data['studentName'] ?? '',
-      subject: data['subject'] ?? '', 
-      score: data['score'] ?? 0,
-      totalQuestions: data['totalQuestions'] ?? 0,
-      studentAnswers: List<int>.from(data['studentAnswers'] ?? []),
-      analysis: List<bool>.from(data['analysis'] ?? []),
-      timestamp: (data['timestamp'] as Timestamp).toDate(),
+    final Map<String, dynamic> data = doc.data() as Map<String, dynamic>;
+    
+    final String parsedId = doc.id;
+    
+    final dynamic rawName = data['studentName'];
+    String parsedName;
+    if (rawName != null) {
+      parsedName = rawName as String;
+    } else {
+      parsedName = '';
+    }
+
+    final dynamic rawSubject = data['subject'];
+    String parsedSubject;
+    if (rawSubject != null) {
+      parsedSubject = rawSubject as String;
+    } else {
+      parsedSubject = '';
+    }
+
+    final dynamic rawScore = data['score'];
+    int parsedScore;
+    if (rawScore != null) {
+      parsedScore = rawScore as int;
+    } else {
+      parsedScore = 0;
+    }
+
+    final dynamic rawTotal = data['totalQuestions'];
+    int parsedTotal;
+    if (rawTotal != null) {
+      parsedTotal = rawTotal as int;
+    } else {
+      parsedTotal = 0;
+    }
+
+    final dynamic rawAnswers = data['studentAnswers'];
+    List<int> parsedAnswers;
+    if (rawAnswers != null) {
+      parsedAnswers = List<int>.from(rawAnswers as List<dynamic>);
+    } else {
+      parsedAnswers = [];
+    }
+
+    final dynamic rawAnalysis = data['analysis'];
+    List<bool> parsedAnalysis;
+    if (rawAnalysis != null) {
+      parsedAnalysis = List<bool>.from(rawAnalysis as List<dynamic>);
+    } else {
+      parsedAnalysis = [];
+    }
+
+    final dynamic rawTimestamp = data['timestamp'];
+    DateTime parsedTimestamp;
+    if (rawTimestamp != null) {
+      final Timestamp firestoreTime = rawTimestamp as Timestamp;
+      parsedTimestamp = firestoreTime.toDate();
+    } else {
+      parsedTimestamp = DateTime.now();
+    }
+
+    final StudentResult result = StudentResult(
+      id: parsedId,
+      studentName: parsedName,
+      subject: parsedSubject,
+      score: parsedScore,
+      totalQuestions: parsedTotal,
+      studentAnswers: parsedAnswers,
+      analysis: parsedAnalysis,
+      timestamp: parsedTimestamp,
     );
+
+    return result;
   }
 
-  // Convert Flutter Object to Map format for Firebase storage
+  // converts flutter object to map format for firebase storage explicitly
   Map<String, dynamic> toMap() {
-    return {
+    final Timestamp firestoreTimestamp = Timestamp.fromDate(timestamp);
+    
+    final Map<String, dynamic> mappedData = {
       'studentName': studentName,
       'subject': subject, 
       'score': score,
       'totalQuestions': totalQuestions,
       'studentAnswers': studentAnswers,
       'analysis': analysis,
-      'timestamp': Timestamp.fromDate(timestamp),
+      'timestamp': firestoreTimestamp,
     };
+    
+    return mappedData;
   }
 }
