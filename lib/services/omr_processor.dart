@@ -17,6 +17,8 @@ class OMRProcessor {
 
     if (originalImage == null) {
       return <int>[];
+    } else {
+      // continues execution
     }
 
     return processImage(originalImage, totalQuestions);
@@ -25,6 +27,8 @@ class OMRProcessor {
   static List<int> processImage(img.Image originalImage, int totalQuestions) {
     if (totalQuestions <= 0) {
       return <int>[];
+    } else {
+      // continues execution
     }
 
     final img.Image grayscale = img.grayscale(originalImage);
@@ -47,6 +51,8 @@ class OMRProcessor {
 
     if (grid == null) {
       return List<int>.filled(totalQuestions, -1);
+    } else {
+      // continues execution
     }
 
     final List<int> detectedAnswers = List<int>.filled(totalQuestions, -1);
@@ -57,8 +63,14 @@ class OMRProcessor {
       for (int colIndex = 0; colIndex < _columns; colIndex++) {
         final int questionIndex = (colIndex * _itemsPerColumn) + rowIndex;
 
-        if (questionIndex >= totalQuestions || colIndex >= row.groups.length) {
+        if (questionIndex >= totalQuestions) {
           continue;
+        } else {
+          if (colIndex >= row.groups.length) {
+            continue;
+          } else {
+            // continues execution
+          }
         }
 
         final _BubbleGroup group = row.groups[colIndex];
@@ -115,12 +127,16 @@ class OMRProcessor {
 
       if (backgroundWeight == 0) {
         continue;
+      } else {
+        // continues execution
       }
 
       final int foregroundWeight = totalPixels - backgroundWeight;
 
       if (foregroundWeight == 0) {
         break;
+      } else {
+        // continues execution
       }
 
       backgroundSum = backgroundSum + (threshold * histogram[threshold]);
@@ -135,6 +151,8 @@ class OMRProcessor {
       if (betweenClassVariance > bestVariance) {
         bestVariance = betweenClassVariance;
         bestThreshold = threshold;
+      } else {
+        // continues execution
       }
     }
 
@@ -147,6 +165,8 @@ class OMRProcessor {
     for (int i = 0; i < luminance.length; i++) {
       if (luminance[i] <= threshold) {
         mask[i] = 1;
+      } else {
+        // continues execution
       }
     }
 
@@ -170,8 +190,14 @@ class OMRProcessor {
       for (int x = 0; x < width; x++) {
         final int startIndex = (y * width) + x;
 
-        if (darkMask[startIndex] == 0 || visited[startIndex] == 1) {
+        if (darkMask[startIndex] == 0) {
           continue;
+        } else {
+          if (visited[startIndex] == 1) {
+            continue;
+          } else {
+            // continues execution
+          }
         }
 
         visited[startIndex] = 1;
@@ -191,15 +217,26 @@ class OMRProcessor {
 
           if (currentX < minX) {
             minX = currentX;
+          } else {
+            // continues execution
           }
+          
           if (currentX > maxX) {
             maxX = currentX;
+          } else {
+            // continues execution
           }
+
           if (currentY < minY) {
             minY = currentY;
+          } else {
+            // continues execution
           }
+
           if (currentY > maxY) {
             maxY = currentY;
+          } else {
+            // continues execution
           }
 
           _enqueueDarkNeighbor(
@@ -244,23 +281,70 @@ class OMRProcessor {
         final int componentHeight = maxY - minY + 1;
         final double aspectRatio = componentWidth / componentHeight;
         final double fillRatio = area / (componentWidth * componentHeight);
-        final bool hasBubbleSize =
-            componentWidth >= minSize &&
-            componentHeight >= minSize &&
-            componentWidth <= maxSize &&
-            componentHeight <= maxSize;
-        final bool hasBubbleShape = aspectRatio >= 0.6 && aspectRatio <= 1.6;
-        final bool hasBubbleArea =
-            area >= minArea && area <= maxArea && fillRatio >= 0.08;
+        
+        bool hasBubbleSize;
+        if (componentWidth >= minSize) {
+          if (componentHeight >= minSize) {
+            if (componentWidth <= maxSize) {
+              if (componentHeight <= maxSize) {
+                hasBubbleSize = true;
+              } else {
+                hasBubbleSize = false;
+              }
+            } else {
+              hasBubbleSize = false;
+            }
+          } else {
+            hasBubbleSize = false;
+          }
+        } else {
+          hasBubbleSize = false;
+        }
 
-        if (hasBubbleSize && hasBubbleShape && hasBubbleArea) {
-          candidates.add(
-            _BubbleCandidate(
-              centerX: (minX + maxX) / 2.0,
-              centerY: (minY + maxY) / 2.0,
-              diameter: (componentWidth + componentHeight) / 2.0,
-            ),
-          );
+        bool hasBubbleShape;
+        if (aspectRatio >= 0.6) {
+          if (aspectRatio <= 1.6) {
+            hasBubbleShape = true;
+          } else {
+            hasBubbleShape = false;
+          }
+        } else {
+          hasBubbleShape = false;
+        }
+
+        bool hasBubbleArea;
+        if (area >= minArea) {
+          if (area <= maxArea) {
+            if (fillRatio >= 0.08) {
+              hasBubbleArea = true;
+            } else {
+              hasBubbleArea = false;
+            }
+          } else {
+            hasBubbleArea = false;
+          }
+        } else {
+          hasBubbleArea = false;
+        }
+
+        if (hasBubbleSize == true) {
+          if (hasBubbleShape == true) {
+            if (hasBubbleArea == true) {
+              candidates.add(
+                _BubbleCandidate(
+                  centerX: (minX + maxX) / 2.0,
+                  centerY: (minY + maxY) / 2.0,
+                  diameter: (componentWidth + componentHeight) / 2.0,
+                ),
+              );
+            } else {
+              // continues execution
+            }
+          } else {
+            // continues execution
+          }
+        } else {
+          // continues execution
         }
       }
     }
@@ -277,14 +361,34 @@ class OMRProcessor {
     Uint8List visited,
     Queue<int> queue,
   ) {
-    if (x < 0 || y < 0 || x >= width || y >= height) {
+    if (x < 0) {
       return;
+    } else {
+      if (y < 0) {
+        return;
+      } else {
+        if (x >= width) {
+          return;
+        } else {
+          if (y >= height) {
+            return;
+          } else {
+            // continues execution
+          }
+        }
+      }
     }
 
     final int index = (y * width) + x;
 
-    if (darkMask[index] == 0 || visited[index] == 1) {
+    if (darkMask[index] == 0) {
       return;
+    } else {
+      if (visited[index] == 1) {
+        return;
+      } else {
+        // continues execution
+      }
     }
 
     visited[index] = 1;
@@ -297,6 +401,8 @@ class OMRProcessor {
   ) {
     if (candidates.length < _choicesPerQuestion) {
       return null;
+    } else {
+      // continues execution
     }
 
     final List<double> diameters = candidates.map((_BubbleCandidate candidate) {
@@ -315,11 +421,15 @@ class OMRProcessor {
 
       if (groups.isNotEmpty) {
         bubbleRows.add(_BubbleRow(centerY: row.centerY, groups: groups));
+      } else {
+        // continues execution
       }
     }
 
     if (bubbleRows.isEmpty) {
       return null;
+    } else {
+      // continues execution
     }
 
     bubbleRows.sort((_BubbleRow a, _BubbleRow b) {
@@ -330,6 +440,8 @@ class OMRProcessor {
 
     if (bubbleRows.length < requiredRows) {
       return null;
+    } else {
+      // continues execution
     }
 
     _GridWindow? bestWindow;
@@ -345,13 +457,25 @@ class OMRProcessor {
         score: score,
       );
 
-      if (bestWindow == null || candidateWindow.score > bestWindow.score) {
+      if (bestWindow == null) {
         bestWindow = candidateWindow;
+      } else {
+        if (candidateWindow.score > bestWindow.score) {
+          bestWindow = candidateWindow;
+        } else {
+          // continues execution
+        }
       }
     }
 
-    if (bestWindow == null || bestWindow.score <= 0.0) {
+    if (bestWindow == null) {
       return null;
+    } else {
+      if (bestWindow.score <= 0.0) {
+        return null;
+      } else {
+        // continues execution
+      }
     }
 
     return _DetectedGrid(rows: bestWindow.rows);
@@ -369,8 +493,7 @@ class OMRProcessor {
     final List<_CandidateRow> rows = <_CandidateRow>[];
 
     for (final _BubbleCandidate candidate in sortedCandidates) {
-      if (rows.isEmpty ||
-          (candidate.centerY - rows.last.centerY).abs() > yTolerance) {
+      if (rows.isEmpty) {
         rows.add(
           _CandidateRow(
             centerY: candidate.centerY,
@@ -378,7 +501,16 @@ class OMRProcessor {
           ),
         );
       } else {
-        rows.last.add(candidate);
+        if ((candidate.centerY - rows.last.centerY).abs() > yTolerance) {
+          rows.add(
+            _CandidateRow(
+              centerY: candidate.centerY,
+              candidates: <_BubbleCandidate>[candidate],
+            ),
+          );
+        } else {
+          rows.last.add(candidate);
+        }
       }
     }
 
@@ -416,6 +548,8 @@ class OMRProcessor {
   static bool _isRegularBubbleGroup(List<_BubbleCandidate> bubbles) {
     if (bubbles.length != _choicesPerQuestion) {
       return false;
+    } else {
+      // continues execution
     }
 
     final List<double> gaps = <double>[];
@@ -434,15 +568,33 @@ class OMRProcessor {
             .reduce((double a, double b) => a + b) /
         bubbles.length;
 
-    return meanGap >= meanDiameter * 1.15 &&
-        meanGap <= meanDiameter * 4.5 &&
-        minGap > 0 &&
-        maxGap / minGap <= 1.75;
+    bool result;
+    if (meanGap >= meanDiameter * 1.15) {
+      if (meanGap <= meanDiameter * 4.5) {
+        if (minGap > 0) {
+          if (maxGap / minGap <= 1.75) {
+            result = true;
+          } else {
+            result = false;
+          }
+        } else {
+          result = false;
+        }
+      } else {
+        result = false;
+      }
+    } else {
+      result = false;
+    }
+
+    return result;
   }
 
   static double _scoreGridWindow(List<_BubbleRow> rows, int totalQuestions) {
     if (rows.isEmpty) {
       return 0.0;
+    } else {
+      // continues execution
     }
 
     double groupScore = 0.0;
@@ -454,6 +606,8 @@ class OMRProcessor {
 
         if (questionIndex < totalQuestions) {
           expectedGroups = expectedGroups + 1;
+        } else {
+          // continues execution
         }
       }
 
@@ -467,6 +621,8 @@ class OMRProcessor {
 
     if (expectedGroups == 0) {
       return 0.0;
+    } else {
+      // continues execution
     }
 
     double regularityScore = 1.0;
@@ -488,6 +644,8 @@ class OMRProcessor {
 
       final double averageDeviation = absoluteDeviation / gaps.length;
       regularityScore = 1.0 / (1.0 + (averageDeviation / max(1.0, meanGap)));
+    } else {
+      // continues execution
     }
 
     return (groupScore / expectedGroups) + regularityScore;
@@ -501,6 +659,8 @@ class OMRProcessor {
 
       if (questionIndex < totalQuestions) {
         expectedGroups = expectedGroups + 1;
+      } else {
+        // continues execution
       }
     }
 
@@ -529,6 +689,8 @@ class OMRProcessor {
 
         if ((dx * dx) + (dy * dy) > radiusSquared) {
           continue;
+        } else {
+          // continues execution
         }
 
         final int value = luminance[(y * width) + x];
@@ -540,6 +702,8 @@ class OMRProcessor {
 
     if (sampledPixels == 0) {
       return 0.0;
+    } else {
+      // continues execution
     }
 
     return totalInk / sampledPixels;
@@ -548,6 +712,8 @@ class OMRProcessor {
   static int _selectMarkedChoice(List<double> scores) {
     if (scores.isEmpty) {
       return -1;
+    } else {
+      // continues execution
     }
 
     int bestIndex = 0;
@@ -561,21 +727,42 @@ class OMRProcessor {
         secondBestScore = bestScore;
         bestScore = score;
         bestIndex = i;
-      } else if (score > secondBestScore) {
-        secondBestScore = score;
+      } else {
+        if (score > secondBestScore) {
+          secondBestScore = score;
+        } else {
+          // continues execution
+        }
       }
     }
 
-    final bool isDarkEnough = bestScore >= 0.16;
-    final bool isClearlyBest =
-        bestScore - secondBestScore >= 0.04 ||
-        bestScore >= secondBestScore * 1.35;
-
-    if (isDarkEnough && isClearlyBest) {
-      return bestIndex;
+    bool isDarkEnough;
+    if (bestScore >= 0.16) {
+      isDarkEnough = true;
+    } else {
+      isDarkEnough = false;
     }
 
-    return -1;
+    bool isClearlyBest;
+    if (bestScore - secondBestScore >= 0.04) {
+      isClearlyBest = true;
+    } else {
+      if (bestScore >= secondBestScore * 1.35) {
+        isClearlyBest = true;
+      } else {
+        isClearlyBest = false;
+      }
+    }
+
+    if (isDarkEnough == true) {
+      if (isClearlyBest == true) {
+        return bestIndex;
+      } else {
+        return -1;
+      }
+    } else {
+      return -1;
+    }
   }
 }
 
