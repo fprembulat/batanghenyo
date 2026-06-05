@@ -1,10 +1,10 @@
 plugins {
     id("com.android.application")
-    // START: FlutterFire Configuration
+    // start flutterfire configuration
     id("com.google.gms.google-services")
-    // END: FlutterFire Configuration
+    // end flutterfire configuration
     id("kotlin-android")
-    // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
+    // the flutter gradle plugin must be applied after the android and kotlin gradle plugins
     id("dev.flutter.flutter-gradle-plugin")
 }
 
@@ -23,11 +23,10 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
+        // specify unique application id
         applicationId = "com.example.batanghenyo"
-        // You can update the following values to match your application needs.
-        // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // update the following values to match application needs
+        minSdk = 24
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -35,8 +34,7 @@ android {
 
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
+            // add signature signing config for the release build, signing with the debug keys for now
             signingConfig = signingConfigs.getByName("debug")
         }
     }

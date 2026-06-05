@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import '../models/student_result.dart';
 
 class FirebaseService {
@@ -55,7 +56,7 @@ class FirebaseService {
   // streams to listen to results filtered by subject
   Stream<List<StudentResult>> streamResults({String? subjectFilter}) {
     final CollectionReference collectionRef = _db.collection('student_results');
-    Query query = collectionRef.orderBy('timestamp', descending: true);
+    Query query = collectionRef; 
     
     if (subjectFilter != null) {
       if (subjectFilter != 'All') {
@@ -70,13 +71,29 @@ class FirebaseService {
     final Stream<QuerySnapshot> snapshots = query.snapshots();
     
     return snapshots.map((QuerySnapshot snapshot) {
-      final List<QueryDocumentSnapshot> docs = snapshot.docs;
-      
-      final List<StudentResult> results = docs.map((QueryDocumentSnapshot doc) {
-        return StudentResult.fromFirestore(doc);
-      }).toList();
-      
-      return results;
+      try {
+        final List<QueryDocumentSnapshot> docs = snapshot.docs;
+        
+        final List<StudentResult> results = docs.map((QueryDocumentSnapshot doc) {
+          final StudentResult parsedResult = StudentResult.fromFirestore(doc);
+          return parsedResult;
+        }).toList();
+        
+        // sorts the list explicitly in dart to bypass firestore composite index requirement
+        results.sort((StudentResult a, StudentResult b) {
+          final DateTime timeA = a.timestamp;
+          final DateTime timeB = b.timestamp;
+          final int comparison = timeB.compareTo(timeA);
+          return comparison;
+        });
+        
+        return results;
+      } catch (error) {
+        // captures stream evaluation crashes silently without destroying the ui pipeline
+        debugPrint('error parsing student result stream: $error');
+        final List<StudentResult> fallbackList = [];
+        return fallbackList;
+      }
     });
   }
 
