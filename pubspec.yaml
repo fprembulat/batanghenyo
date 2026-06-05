@@ -1,50 +1,59 @@
 name: batanghenyo
 description: "A new Flutter project."
-# The following line prevents the package from being accidentally published to
-# pub.dev using `flutter pub publish`. This is preferred for private packages.
-publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+# prevents the package from being accidentally published to pubdev, this is preferred for private packages
+publish_to: 'none'
 
-# The following defines the version and build number for your application.
-# A version number is three numbers separated by dots, like 1.2.43
-# followed by an optional build number separated by a +.
+# defines the version and build number for your application, a version number is three numbers separated by dots followed by an optional build number
 version: 1.0.0+1
 
 environment:
   sdk: '>=3.11.3 <4.0.0'
 
-# Dependencies specify other packages that your package needs in order to work.
+# dependencies specify other packages that your package needs in order to work
 dependencies:
   flutter:
     sdk: flutter
 
-  # The following adds the Cupertino Icons font to your application.
-  # Use with the CupertinoIcons class for iOS style icons.
+  # adds the cupertino icons font to your application, use with the cupertinoicons class for ios style icons
   cupertino_icons: ^1.0.8
 
-  # 🔥 Core Firebase Config
   firebase_core: ^3.15.2
   cloud_firestore: ^5.0.0
 
-  # 🔥 Image Access & Auto Processing Engine
   image_picker: ^1.1.0
   image: ^4.2.0
   firebase_auth: ^5.7.0
   provider: ^6.1.5+1
   flutter_dotenv: ^6.0.1
+  camera: 0.12.0+1
+  opencv_dart: 2.2.1+4
+
+hooks:
+  user_defines:
+    opencv_dart:
+      include_modules:
+        - imgproc
+        - imgcodecs
+      exclude_modules:
+        - contrib
+        - dnn
+        - features2d
+        - highgui
+        - objdetect
+        - photo
+        - stitching
+        - video
+        - videoio
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  # The "flutter_lints" package below contains a set of recommended lints
+  # contains a set of recommended lints
   flutter_lints: ^6.0.0
 
-# The following section is specific to Flutter packages.
 flutter:
-
-  # The following line ensures that the Material Icons font is
-  # included with your application, so that you can use the icons in
-  # the material Icons class.
+  # ensures that the material icons font is included with your application
   uses-material-design: true
   assets:
     - .env
