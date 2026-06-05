@@ -4,7 +4,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:camera/camera.dart';
-import 'package:dartcv4/dartcv.dart' as cv;
+import 'package:opencv_dart/opencv_dart.dart' as cv;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -52,8 +52,15 @@ class _ScannerScreenState extends State<ScannerScreen>
   String? _cameraError;
 
   bool get _hasReliableCorners {
-    return _detectedCorners != null &&
-        _stableFrameCount >= _requiredStableFrames;
+    if (_detectedCorners != null) {
+      if (_stableFrameCount >= _requiredStableFrames) {
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      return false;
+    }
   }
 
   @override
@@ -67,14 +74,24 @@ class _ScannerScreenState extends State<ScannerScreen>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     final CameraController? controller = _cameraController;
 
-    if (controller == null || controller.value.isInitialized == false) {
+    if (controller == null) {
       return;
+    } else {
+      if (controller.value.isInitialized == false) {
+        return;
+      } else {
+        // continues execution
+      }
     }
 
     if (state == AppLifecycleState.inactive) {
       _disposeCameraController();
-    } else if (state == AppLifecycleState.resumed) {
-      _initializeCamera();
+    } else {
+      if (state == AppLifecycleState.resumed) {
+        _initializeCamera();
+      } else {
+        // explicit empty block for unhandled states
+      }
     }
   }
 
@@ -97,11 +114,17 @@ class _ScannerScreenState extends State<ScannerScreen>
 
       if (cameras.isEmpty) {
         throw const MarkerDetectionException('no Android camera was found');
+      } else {
+        // continues execution
       }
 
       final CameraDescription selectedCamera = cameras.firstWhere(
         (CameraDescription camera) {
-          return camera.lensDirection == CameraLensDirection.back;
+          if (camera.lensDirection == CameraLensDirection.back) {
+            return true;
+          } else {
+            return false;
+          }
         },
         orElse: () {
           return cameras.first;
@@ -120,6 +143,8 @@ class _ScannerScreenState extends State<ScannerScreen>
       if (mounted == false) {
         await controller.dispose();
         return;
+      } else {
+        // continues execution
       }
 
       _cameraController = controller;
@@ -129,6 +154,8 @@ class _ScannerScreenState extends State<ScannerScreen>
         setState(() {
           _isInitializingCamera = false;
         });
+      } else {
+        // continues execution
       }
     } on CameraException catch (error) {
       if (mounted == true) {
@@ -136,6 +163,8 @@ class _ScannerScreenState extends State<ScannerScreen>
           _isInitializingCamera = false;
           _cameraError = 'camera failed: ${error.description ?? error.code}';
         });
+      } else {
+        // continues execution
       }
     } catch (error) {
       if (mounted == true) {
@@ -143,6 +172,8 @@ class _ScannerScreenState extends State<ScannerScreen>
           _isInitializingCamera = false;
           _cameraError = error.toString();
         });
+      } else {
+        // continues execution
       }
     }
   }
@@ -153,14 +184,18 @@ class _ScannerScreenState extends State<ScannerScreen>
 
     if (controller == null) {
       return;
+    } else {
+      // continues execution
     }
 
     try {
       if (controller.value.isStreamingImages == true) {
         await controller.stopImageStream();
+      } else {
+        // continues execution
       }
     } catch (_) {
-      // The camera may already be closing during Android lifecycle changes.
+      // camera may already be closing during android lifecycle changes
     }
 
     await controller.dispose();
@@ -169,9 +204,14 @@ class _ScannerScreenState extends State<ScannerScreen>
   void _handleCameraFrame(CameraImage image) {
     final DateTime now = DateTime.now();
 
-    if (_isAnalyzingFrame == true ||
-        now.difference(_lastFrameStartedAt) < _frameThrottle) {
+    if (_isAnalyzingFrame == true) {
       return;
+    } else {
+      if (now.difference(_lastFrameStartedAt) < _frameThrottle) {
+        return;
+      } else {
+        // continues execution
+      }
     }
 
     _isAnalyzingFrame = true;
@@ -194,6 +234,8 @@ class _ScannerScreenState extends State<ScannerScreen>
             );
             _cameraError = null;
           });
+        } else {
+          // continues execution
         }
       } on MarkerDetectionException catch (error) {
         if (mounted == true) {
@@ -206,6 +248,8 @@ class _ScannerScreenState extends State<ScannerScreen>
             _stableFrameCount = 0;
             _cameraError = error.message;
           });
+        } else {
+          // continues execution
         }
       } catch (error) {
         if (mounted == true) {
@@ -214,6 +258,8 @@ class _ScannerScreenState extends State<ScannerScreen>
             _stableFrameCount = 0;
             _cameraError = 'marker detection failed: $error';
           });
+        } else {
+          // continues execution
         }
       } finally {
         _isAnalyzingFrame = false;
@@ -227,19 +273,30 @@ class _ScannerScreenState extends State<ScannerScreen>
     if (studentName.isEmpty == true) {
       _showSnackBar('please enter the student name first');
       return;
+    } else {
+      // continues execution
     }
 
     final CameraController? controller = _cameraController;
 
-    if (controller == null || controller.value.isInitialized == false) {
+    if (controller == null) {
       _showSnackBar('camera is not ready yet');
       return;
+    } else {
+      if (controller.value.isInitialized == false) {
+        _showSnackBar('camera is not ready yet');
+        return;
+      } else {
+        // continues execution
+      }
     }
 
     if (_hasReliableCorners == false) {
       throw const MarkerDetectionException(
         'cannot capture: four corner markers are not aligned yet',
       );
+    } else {
+      // continues execution
     }
 
     setState(() {
@@ -249,6 +306,8 @@ class _ScannerScreenState extends State<ScannerScreen>
     try {
       if (controller.value.isStreamingImages == true) {
         await controller.stopImageStream();
+      } else {
+        // continues execution
       }
 
       final XFile capturedPhoto = await controller.takePicture();
@@ -257,26 +316,46 @@ class _ScannerScreenState extends State<ScannerScreen>
 
       if (mounted == true) {
         await controller.startImageStream(_handleCameraFrame);
+      } else {
+        // continues execution
       }
     } on MarkerDetectionException catch (error) {
       _showSnackBar(error.message);
-      if (controller.value.isInitialized == true &&
-          controller.value.isStreamingImages == false &&
-          mounted == true) {
-        await controller.startImageStream(_handleCameraFrame);
+      if (controller.value.isInitialized == true) {
+        if (controller.value.isStreamingImages == false) {
+          if (mounted == true) {
+            await controller.startImageStream(_handleCameraFrame);
+          } else {
+            // continues execution
+          }
+        } else {
+          // continues execution
+        }
+      } else {
+        // continues execution
       }
     } catch (error) {
       _showSnackBar('scan failed: $error');
-      if (controller.value.isInitialized == true &&
-          controller.value.isStreamingImages == false &&
-          mounted == true) {
-        await controller.startImageStream(_handleCameraFrame);
+      if (controller.value.isInitialized == true) {
+        if (controller.value.isStreamingImages == false) {
+          if (mounted == true) {
+            await controller.startImageStream(_handleCameraFrame);
+          } else {
+            // continues execution
+          }
+        } else {
+          // continues execution
+        }
+      } else {
+        // continues execution
       }
     } finally {
       if (mounted == true) {
         setState(() {
           _isProcessing = false;
         });
+      } else {
+        // continues execution
       }
     }
   }
@@ -293,6 +372,8 @@ class _ScannerScreenState extends State<ScannerScreen>
     if (masterKey == null) {
       _showSnackBar('master key not found for this exam');
       return;
+    } else {
+      // continues execution
     }
 
     final int totalQuestions = masterKey.length;
@@ -308,10 +389,13 @@ class _ScannerScreenState extends State<ScannerScreen>
       questionIndex < totalQuestions;
       questionIndex++
     ) {
-      if (questionIndex < studentAnswers.length &&
-          studentAnswers[questionIndex] == masterKey[questionIndex]) {
-        score = score + 1;
-        analysis.add(true);
+      if (questionIndex < studentAnswers.length) {
+        if (studentAnswers[questionIndex] == masterKey[questionIndex]) {
+          score = score + 1;
+          analysis.add(true);
+        } else {
+          analysis.add(false);
+        }
       } else {
         analysis.add(false);
       }
@@ -333,12 +417,16 @@ class _ScannerScreenState extends State<ScannerScreen>
     if (mounted == true) {
       _showSuccessModal(finalResult);
       _studentNameController.clear();
+    } else {
+      // continues execution
     }
   }
 
   void _showSnackBar(String message) {
     if (mounted == false) {
       return;
+    } else {
+      // continues execution
     }
 
     ScaffoldMessenger.of(context).showSnackBar(
@@ -393,52 +481,132 @@ class _ScannerScreenState extends State<ScannerScreen>
   @override
   Widget build(BuildContext context) {
     final CameraController? controller = _cameraController;
-    final bool cameraReady =
-        controller != null &&
-        controller.value.isInitialized == true &&
-        _isInitializingCamera == false;
+    
+    bool cameraReady;
+    if (controller != null) {
+      if (controller.value.isInitialized == true) {
+        if (_isInitializingCamera == false) {
+          cameraReady = true;
+        } else {
+          cameraReady = false;
+        }
+      } else {
+        cameraReady = false;
+      }
+    } else {
+      cameraReady = false;
+    }
 
     Widget cameraContent;
-
-    if (_cameraError != null && cameraReady == false) {
-      cameraContent = Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Text(
-            _cameraError!,
-            textAlign: TextAlign.center,
-            style: const TextStyle(color: Colors.redAccent),
+    if (_cameraError != null) {
+      if (cameraReady == false) {
+        cameraContent = Center(
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Text(
+              _cameraError!,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: Colors.redAccent),
+            ),
           ),
+        );
+      } else {
+        cameraContent = Stack(
+          fit: StackFit.expand,
+          children: [
+            CameraPreview(controller!),
+            CustomPaint(
+              painter: _MarkerOverlayPainter(
+                corners: _detectedCorners,
+                frameSize: _latestFrameSize,
+                sensorOrientation: controller.description.sensorOrientation,
+                isReady: _hasReliableCorners,
+              ),
+            ),
+            Positioned(
+              left: 16.0,
+              right: 16.0,
+              bottom: 16.0,
+              child: _ScannerStatusBar(
+                message: _cameraError!,
+                isReady: _hasReliableCorners,
+              ),
+            ),
+          ],
+        );
+      }
+    } else {
+      if (cameraReady == false) {
+        cameraContent = const Center(child: CircularProgressIndicator());
+      } else {
+        String statusBarMessage;
+        if (_hasReliableCorners == true) {
+          statusBarMessage = 'markers locked';
+        } else {
+          statusBarMessage = 'align the four black corner squares';
+        }
+
+        cameraContent = Stack(
+          fit: StackFit.expand,
+          children: [
+            CameraPreview(controller!),
+            CustomPaint(
+              painter: _MarkerOverlayPainter(
+                corners: _detectedCorners,
+                frameSize: _latestFrameSize,
+                sensorOrientation: controller.description.sensorOrientation,
+                isReady: _hasReliableCorners,
+              ),
+            ),
+            Positioned(
+              left: 16.0,
+              right: 16.0,
+              bottom: 16.0,
+              child: _ScannerStatusBar(
+                message: statusBarMessage,
+                isReady: _hasReliableCorners,
+              ),
+            ),
+          ],
+        );
+      }
+    }
+
+    Color buttonColor;
+    if (_hasReliableCorners == true) {
+      buttonColor = Colors.teal;
+    } else {
+      buttonColor = Colors.grey;
+    }
+
+    Widget actionIcon;
+    if (_isProcessing == true) {
+      actionIcon = const SizedBox(
+        width: 18.0,
+        height: 18.0,
+        child: CircularProgressIndicator(
+          strokeWidth: 2.0,
+          color: Colors.white,
         ),
       );
-    } else if (cameraReady == false) {
-      cameraContent = const Center(child: CircularProgressIndicator());
     } else {
-      cameraContent = Stack(
-        fit: StackFit.expand,
-        children: [
-          CameraPreview(controller),
-          CustomPaint(
-            painter: _MarkerOverlayPainter(
-              corners: _detectedCorners,
-              frameSize: _latestFrameSize,
-              sensorOrientation: controller.description.sensorOrientation,
-              isReady: _hasReliableCorners,
-            ),
-          ),
-          Positioned(
-            left: 16.0,
-            right: 16.0,
-            bottom: 16.0,
-            child: _ScannerStatusBar(
-              message: _hasReliableCorners
-                  ? 'markers locked'
-                  : (_cameraError ?? 'align the four black corner squares'),
-              isReady: _hasReliableCorners,
-            ),
-          ),
-        ],
-      );
+      actionIcon = const Icon(Icons.document_scanner);
+    }
+
+    String buttonText;
+    if (_isProcessing == true) {
+      buttonText = 'processing scan';
+    } else {
+      buttonText = 'capture and grade';
+    }
+
+    VoidCallback? buttonAction;
+    if (_isProcessing == true) {
+      buttonAction = null;
+    } else {
+      buttonAction = () {
+        _captureAndGrade();
+      };
     }
 
     return Scaffold(
@@ -461,29 +629,14 @@ class _ScannerScreenState extends State<ScannerScreen>
                 ),
                 const SizedBox(height: 12.0),
                 ElevatedButton.icon(
-                  onPressed: _isProcessing == true
-                      ? null
-                      : () => _captureAndGrade(),
+                  onPressed: buttonAction,
                   style: ElevatedButton.styleFrom(
                     minimumSize: const Size.fromHeight(56.0),
-                    backgroundColor: _hasReliableCorners
-                        ? Colors.teal
-                        : Colors.grey,
+                    backgroundColor: buttonColor,
                     foregroundColor: Colors.white,
                   ),
-                  icon: _isProcessing
-                      ? const SizedBox(
-                          width: 18.0,
-                          height: 18.0,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2.0,
-                            color: Colors.white,
-                          ),
-                        )
-                      : const Icon(Icons.document_scanner),
-                  label: Text(
-                    _isProcessing ? 'processing scan' : 'capture and grade',
-                  ),
+                  icon: actionIcon,
+                  label: Text(buttonText),
                 ),
               ],
             ),
@@ -500,6 +653,8 @@ class _MarkerDetector {
   static _MarkerDetection detect(CameraImage image) {
     if (image.planes.isEmpty) {
       throw const MarkerDetectionException('camera frame has no image planes');
+    } else {
+      // continues execution
     }
 
     final Uint8List luminance = _copyYPlane(image);
@@ -521,6 +676,8 @@ class _MarkerDetector {
         _analysisWidth,
         analysisHeight,
       ), interpolation: cv.INTER_AREA);
+      
+      // slightly lower thresholding strictness to catch lighter printed squares
       final (double _, cv.Mat thresholded) = cv.threshold(
         resized,
         0,
@@ -541,25 +698,37 @@ class _MarkerDetector {
       for (final cv.VecPoint contour in contours) {
         final double area = cv.contourArea(contour).abs();
 
-        if (area < frameArea * 0.00045 || area > frameArea * 0.05) {
+        // drastically lower the minimum area requirement to catch small markers
+        if (area < frameArea * 0.00010) {
           continue;
+        } else {
+          if (area > frameArea * 0.08) {
+            continue;
+          } else {
+            // continues execution
+          }
         }
 
         final double perimeter = cv.arcLength(contour, true);
 
         if (perimeter <= 0) {
           continue;
+        } else {
+          // continues execution
         }
 
+        // increase approximation tolerance to handle slight blurring/rounding of the printed corners
         final cv.VecPoint polygon = cv.approxPolyDP(
           contour,
-          perimeter * 0.035,
+          perimeter * 0.05,
           true,
         );
 
         try {
           if (polygon.length != 4) {
             continue;
+          } else {
+            // continues execution
           }
 
           final cv.Rect bounds = cv.boundingRect(polygon);
@@ -567,11 +736,24 @@ class _MarkerDetector {
           final double rectArea = bounds.width * bounds.height.toDouble();
           final double extent = area / rectArea;
 
-          if (aspectRatio < 0.72 ||
-              aspectRatio > 1.28 ||
-              extent < 0.58 ||
-              extent > 1.08) {
+          // widen the acceptable aspect ratio so skewed camera angles don't break the scan
+          if (aspectRatio < 0.50) {
             continue;
+          } else {
+            if (aspectRatio > 1.50) {
+              continue;
+            } else {
+              // loosen the extent to allow for ink bleed
+              if (extent < 0.40) {
+                continue;
+              } else {
+                if (extent > 1.20) {
+                  continue;
+                } else {
+                  // continues execution
+                }
+              }
+            }
           }
 
           final Offset center = Offset(
@@ -591,6 +773,8 @@ class _MarkerDetector {
         throw MarkerDetectionException(
           'found ${squares.length}/4 corner markers',
         );
+      } else {
+        // continues execution
       }
 
       final List<Offset> corners = _selectCornerSquares(
@@ -649,21 +833,32 @@ class _MarkerDetector {
       double bestDistance = double.infinity;
 
       for (final _SquareCandidate candidate in largestSquares) {
-        final Offset target = switch (corner) {
-          _MarkerCorner.topLeft => Offset.zero,
-          _MarkerCorner.topRight => Offset(frameSize.width, 0),
-          _MarkerCorner.bottomRight => Offset(
-            frameSize.width,
-            frameSize.height,
-          ),
-          _MarkerCorner.bottomLeft => Offset(0, frameSize.height),
-        };
+        Offset target;
+        if (corner == _MarkerCorner.topLeft) {
+          target = Offset.zero;
+        } else {
+          if (corner == _MarkerCorner.topRight) {
+            target = Offset(frameSize.width, 0);
+          } else {
+            if (corner == _MarkerCorner.bottomRight) {
+              target = Offset(frameSize.width, frameSize.height);
+            } else {
+              target = Offset(0, frameSize.height);
+            }
+          }
+        }
+
         final double distance = (candidate.center - target).distance;
 
-        if (distance < bestDistance &&
-            selected.values.contains(candidate) == false) {
-          bestDistance = distance;
-          bestCandidate = candidate;
+        if (distance < bestDistance) {
+          if (selected.values.contains(candidate) == false) {
+            bestDistance = distance;
+            bestCandidate = candidate;
+          } else {
+            // continues execution
+          }
+        } else {
+          // continues execution
         }
       }
 
@@ -671,6 +866,8 @@ class _MarkerDetector {
         throw const MarkerDetectionException(
           'could not assign all four corner markers',
         );
+      } else {
+        // continues execution
       }
 
       selected[corner] = bestCandidate;
@@ -703,8 +900,14 @@ class _MarkerOverlayPainter extends CustomPainter {
     final List<Offset>? sourceCorners = corners;
     final Size? sourceFrameSize = frameSize;
 
-    if (sourceCorners == null || sourceFrameSize == null) {
+    if (sourceCorners == null) {
       return;
+    } else {
+      if (sourceFrameSize == null) {
+        return;
+      } else {
+        // continues execution
+      }
     }
 
     final List<Offset> displayCorners = sourceCorners.map((Offset point) {
@@ -716,13 +919,21 @@ class _MarkerOverlayPainter extends CustomPainter {
       ..lineTo(displayCorners[2].dx, displayCorners[2].dy)
       ..lineTo(displayCorners[3].dx, displayCorners[3].dy)
       ..close();
+      
+    Color baseColor;
+    if (isReady == true) {
+      baseColor = Colors.greenAccent;
+    } else {
+      baseColor = Colors.orangeAccent;
+    }
+
     final Paint fillPaint = Paint()
-      ..color = (isReady ? Colors.greenAccent : Colors.orangeAccent).withValues(
+      ..color = baseColor.withValues(
         alpha: 0.12,
       )
       ..style = PaintingStyle.fill;
     final Paint strokePaint = Paint()
-      ..color = isReady ? Colors.greenAccent : Colors.orangeAccent
+      ..color = baseColor
       ..strokeWidth = 4.0
       ..style = PaintingStyle.stroke;
 
@@ -765,34 +976,47 @@ class _MarkerOverlayPainter extends CustomPainter {
         point: Offset(sourceSize.height - point.dy, point.dx),
         size: Size(sourceSize.height, sourceSize.width),
       );
+    } else {
+      if (sensorOrientation == 270) {
+        return _RotatedPoint(
+          point: Offset(point.dy, sourceSize.width - point.dx),
+          size: Size(sourceSize.height, sourceSize.width),
+        );
+      } else {
+        if (sensorOrientation == 180) {
+          return _RotatedPoint(
+            point: Offset(
+              sourceSize.width - point.dx,
+              sourceSize.height - point.dy,
+            ),
+            size: sourceSize,
+          );
+        } else {
+          return _RotatedPoint(point: point, size: sourceSize);
+        }
+      }
     }
-
-    if (sensorOrientation == 270) {
-      return _RotatedPoint(
-        point: Offset(point.dy, sourceSize.width - point.dx),
-        size: Size(sourceSize.height, sourceSize.width),
-      );
-    }
-
-    if (sensorOrientation == 180) {
-      return _RotatedPoint(
-        point: Offset(
-          sourceSize.width - point.dx,
-          sourceSize.height - point.dy,
-        ),
-        size: sourceSize,
-      );
-    }
-
-    return _RotatedPoint(point: point, size: sourceSize);
   }
 
   @override
   bool shouldRepaint(covariant _MarkerOverlayPainter oldDelegate) {
-    return oldDelegate.corners != corners ||
-        oldDelegate.frameSize != frameSize ||
-        oldDelegate.sensorOrientation != sensorOrientation ||
-        oldDelegate.isReady != isReady;
+    if (oldDelegate.corners != corners) {
+      return true;
+    } else {
+      if (oldDelegate.frameSize != frameSize) {
+        return true;
+      } else {
+        if (oldDelegate.sensorOrientation != sensorOrientation) {
+          return true;
+        } else {
+          if (oldDelegate.isReady != isReady) {
+            return true;
+          } else {
+            return false;
+          }
+        }
+      }
+    }
   }
 }
 
@@ -804,6 +1028,17 @@ class _ScannerStatusBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    IconData statusIcon;
+    Color statusIconColor;
+
+    if (isReady == true) {
+      statusIcon = Icons.check_circle;
+      statusIconColor = Colors.greenAccent;
+    } else {
+      statusIcon = Icons.crop_free;
+      statusIconColor = Colors.white;
+    }
+
     return DecoratedBox(
       decoration: BoxDecoration(
         color: Colors.black.withValues(alpha: 0.64),
@@ -814,8 +1049,8 @@ class _ScannerStatusBar extends StatelessWidget {
         child: Row(
           children: [
             Icon(
-              isReady ? Icons.check_circle : Icons.crop_free,
-              color: isReady ? Colors.greenAccent : Colors.white,
+              statusIcon,
+              color: statusIconColor,
               size: 20.0,
             ),
             const SizedBox(width: 10.0),
