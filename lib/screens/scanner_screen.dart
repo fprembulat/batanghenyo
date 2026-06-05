@@ -50,6 +50,9 @@ class _ScannerScreenState extends State<ScannerScreen>
   bool _isAnalyzingFrame = false;
   bool _isProcessing = false;
   String? _cameraError;
+  
+  // controls the hardware flash state explicitly
+  bool _isFlashOn = false;
 
   bool get _hasReliableCorners {
     if (_detectedCorners != null) {
@@ -112,7 +115,7 @@ class _ScannerScreenState extends State<ScannerScreen>
     try {
       final List<CameraDescription> cameras = await availableCameras();
 
-      if (cameras.isEmpty) {
+      if (cameras.isEmpty == true) {
         throw const MarkerDetectionException('no Android camera was found');
       } else {
         // continues execution
@@ -194,11 +197,42 @@ class _ScannerScreenState extends State<ScannerScreen>
       } else {
         // continues execution
       }
+      
+      // ensures the flash turns off when the screen is closed or minimized
+      if (_isFlashOn == true) {
+        await controller.setFlashMode(FlashMode.off);
+      } else {
+        // continues execution
+      }
     } catch (_) {
       // camera may already be closing during android lifecycle changes
     }
 
     await controller.dispose();
+  }
+
+  Future<void> _toggleFlash() async {
+    final CameraController? controller = _cameraController;
+
+    if (controller != null) {
+      if (controller.value.isInitialized == true) {
+        if (_isFlashOn == true) {
+          await controller.setFlashMode(FlashMode.off);
+          setState(() {
+            _isFlashOn = false;
+          });
+        } else {
+          await controller.setFlashMode(FlashMode.torch);
+          setState(() {
+            _isFlashOn = true;
+          });
+        }
+      } else {
+        // stops execution
+      }
+    } else {
+      // stops execution
+    }
   }
 
   void _handleCameraFrame(CameraImage image) {
@@ -609,8 +643,26 @@ class _ScannerScreenState extends State<ScannerScreen>
       };
     }
 
+    IconData flashIcon;
+    if (_isFlashOn == true) {
+      flashIcon = Icons.flash_on;
+    } else {
+      flashIcon = Icons.flash_off;
+    }
+
+    final Widget flashButton = IconButton(
+      icon: Icon(flashIcon),
+      onPressed: () {
+        _toggleFlash();
+      },
+    );
+
     return Scaffold(
-      appBar: AppBar(title: const Text('scan answer sheet'), centerTitle: true),
+      appBar: AppBar(
+        title: const Text('scan answer sheet'), 
+        centerTitle: true,
+        actions: [flashButton],
+      ),
       body: Column(
         children: [
           Expanded(child: cameraContent),
@@ -651,7 +703,7 @@ class _MarkerDetector {
   static const int _analysisWidth = 420;
 
   static _MarkerDetection detect(CameraImage image) {
-    if (image.planes.isEmpty) {
+    if (image.planes.isEmpty == true) {
       throw const MarkerDetectionException('camera frame has no image planes');
     } else {
       // continues execution
@@ -677,7 +729,6 @@ class _MarkerDetector {
         analysisHeight,
       ), interpolation: cv.INTER_AREA);
       
-      // slightly lower thresholding strictness to catch lighter printed squares
       final (double _, cv.Mat thresholded) = cv.threshold(
         resized,
         0,
@@ -698,7 +749,6 @@ class _MarkerDetector {
       for (final cv.VecPoint contour in contours) {
         final double area = cv.contourArea(contour).abs();
 
-        // drastically lower the minimum area requirement to catch small markers
         if (area < frameArea * 0.00010) {
           continue;
         } else {
@@ -717,7 +767,6 @@ class _MarkerDetector {
           // continues execution
         }
 
-        // increase approximation tolerance to handle slight blurring/rounding of the printed corners
         final cv.VecPoint polygon = cv.approxPolyDP(
           contour,
           perimeter * 0.05,
@@ -736,14 +785,12 @@ class _MarkerDetector {
           final double rectArea = bounds.width * bounds.height.toDouble();
           final double extent = area / rectArea;
 
-          // widen the acceptable aspect ratio so skewed camera angles don't break the scan
           if (aspectRatio < 0.50) {
             continue;
           } else {
             if (aspectRatio > 1.50) {
               continue;
             } else {
-              // loosen the extent to allow for ink bleed
               if (extent < 0.40) {
                 continue;
               } else {

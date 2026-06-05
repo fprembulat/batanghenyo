@@ -41,6 +41,8 @@ class OMRProcessor {
     final List<int> luminance = _readLuminance(scaledImage);
     final int otsuThreshold = _calculateOtsuThreshold(luminance);
     final int componentThreshold = otsuThreshold.clamp(90, 185).toInt();
+    
+    // constructs a binary mask to explicitly isolate dark ink from shadows
     final Uint8List darkMask = _buildDarkMask(luminance, componentThreshold);
     final List<_BubbleCandidate> candidates = _findBubbleCandidates(
       darkMask,
@@ -77,7 +79,7 @@ class OMRProcessor {
         final List<double> scores = <double>[];
 
         for (final _BubbleCandidate bubble in group.bubbles) {
-          scores.add(_scoreBubbleCore(luminance, width, height, bubble));
+          scores.add(_scoreBubbleCore(darkMask, width, height, bubble));
         }
 
         detectedAnswers[questionIndex] = _selectMarkedChoice(scores);
@@ -181,10 +183,12 @@ class OMRProcessor {
     final Uint8List visited = Uint8List(darkMask.length);
     final List<_BubbleCandidate> candidates = <_BubbleCandidate>[];
     final Queue<int> queue = Queue<int>();
-    final int minSize = max(6, (width * 0.006).round());
-    final int maxSize = max(32, (width * 0.05).round());
-    final int minArea = max(14, (width * 0.00002).round());
-    final int maxArea = max(600, (width * 0.0025).round());
+    
+    // adjusts morphological thresholds to account for explicit solid shading
+    final int minSize = max(4, (width * 0.004).round());
+    final int maxSize = max(60, (width * 0.08).round());
+    final int minArea = max(8, (width * 0.00001).round());
+    final int maxArea = max(4000, (width * 0.05).round());
 
     for (int y = 0; y < height; y++) {
       for (int x = 0; x < width; x++) {
@@ -209,7 +213,7 @@ class OMRProcessor {
         int maxY = y;
         int area = 0;
 
-        while (queue.isNotEmpty) {
+        while (queue.isNotEmpty == true) {
           final int currentIndex = queue.removeFirst();
           final int currentX = currentIndex % width;
           final int currentY = currentIndex ~/ width;
@@ -302,8 +306,8 @@ class OMRProcessor {
         }
 
         bool hasBubbleShape;
-        if (aspectRatio >= 0.6) {
-          if (aspectRatio <= 1.6) {
+        if (aspectRatio >= 0.35) {
+          if (aspectRatio <= 2.80) {
             hasBubbleShape = true;
           } else {
             hasBubbleShape = false;
@@ -315,7 +319,7 @@ class OMRProcessor {
         bool hasBubbleArea;
         if (area >= minArea) {
           if (area <= maxArea) {
-            if (fillRatio >= 0.08) {
+            if (fillRatio >= 0.04) {
               hasBubbleArea = true;
             } else {
               hasBubbleArea = false;
@@ -409,7 +413,9 @@ class OMRProcessor {
       return candidate.diameter;
     }).toList()..sort();
     final double medianDiameter = diameters[diameters.length ~/ 2];
-    final double yTolerance = max(7.0, medianDiameter * 0.75);
+    
+    // expands grouping tolerance to absorb slight vertical alignment errors
+    final double yTolerance = max(10.0, medianDiameter * 1.50);
     final List<_CandidateRow> candidateRows = _clusterCandidatesByY(
       candidates,
       yTolerance,
@@ -419,14 +425,14 @@ class OMRProcessor {
     for (final _CandidateRow row in candidateRows) {
       final List<_BubbleGroup> groups = _findBubbleGroups(row.candidates);
 
-      if (groups.isNotEmpty) {
+      if (groups.isNotEmpty == true) {
         bubbleRows.add(_BubbleRow(centerY: row.centerY, groups: groups));
       } else {
         // continues execution
       }
     }
 
-    if (bubbleRows.isEmpty) {
+    if (bubbleRows.isEmpty == true) {
       return null;
     } else {
       // continues execution
@@ -493,7 +499,7 @@ class OMRProcessor {
     final List<_CandidateRow> rows = <_CandidateRow>[];
 
     for (final _BubbleCandidate candidate in sortedCandidates) {
-      if (rows.isEmpty) {
+      if (rows.isEmpty == true) {
         rows.add(
           _CandidateRow(
             centerY: candidate.centerY,
@@ -534,7 +540,7 @@ class OMRProcessor {
         index + _choicesPerQuestion,
       );
 
-      if (_isRegularBubbleGroup(window)) {
+      if (_isRegularBubbleGroup(window) == true) {
         groups.add(_BubbleGroup(bubbles: window));
         index = index + _choicesPerQuestion;
       } else {
@@ -569,10 +575,10 @@ class OMRProcessor {
         bubbles.length;
 
     bool result;
-    if (meanGap >= meanDiameter * 1.15) {
-      if (meanGap <= meanDiameter * 4.5) {
+    if (meanGap >= meanDiameter * 0.90) {
+      if (meanGap <= meanDiameter * 5.0) {
         if (minGap > 0) {
-          if (maxGap / minGap <= 1.75) {
+          if (maxGap / minGap <= 2.8) {
             result = true;
           } else {
             result = false;
@@ -591,7 +597,7 @@ class OMRProcessor {
   }
 
   static double _scoreGridWindow(List<_BubbleRow> rows, int totalQuestions) {
-    if (rows.isEmpty) {
+    if (rows.isEmpty == true) {
       return 0.0;
     } else {
       // continues execution
@@ -668,7 +674,7 @@ class OMRProcessor {
   }
 
   static double _scoreBubbleCore(
-    List<int> luminance,
+    Uint8List darkMask,
     int width,
     int height,
     _BubbleCandidate bubble,
@@ -693,9 +699,13 @@ class OMRProcessor {
           // continues execution
         }
 
-        final int value = luminance[(y * width) + x];
-        final double darkness = ((205 - value) / 205).clamp(0.0, 1.0);
-        totalInk = totalInk + darkness;
+        // exclusively samples the thresholded mask to bypass raw pixel gradients
+        final int maskValue = darkMask[(y * width) + x];
+        if (maskValue == 1) {
+          totalInk = totalInk + 1.0;
+        } else {
+          // continues execution
+        }
         sampledPixels = sampledPixels + 1;
       }
     }
@@ -710,7 +720,7 @@ class OMRProcessor {
   }
 
   static int _selectMarkedChoice(List<double> scores) {
-    if (scores.isEmpty) {
+    if (scores.isEmpty == true) {
       return -1;
     } else {
       // continues execution
@@ -736,18 +746,19 @@ class OMRProcessor {
       }
     }
 
+    // safely adjusted thresholds for comparing explicit pixel masks over raw gradients
     bool isDarkEnough;
-    if (bestScore >= 0.16) {
+    if (bestScore >= 0.25) {
       isDarkEnough = true;
     } else {
       isDarkEnough = false;
     }
 
     bool isClearlyBest;
-    if (bestScore - secondBestScore >= 0.04) {
+    if (bestScore - secondBestScore >= 0.08) {
       isClearlyBest = true;
     } else {
-      if (bestScore >= secondBestScore * 1.35) {
+      if (bestScore >= secondBestScore * 1.25) {
         isClearlyBest = true;
       } else {
         isClearlyBest = false;
