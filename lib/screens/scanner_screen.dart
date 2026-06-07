@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import '../models/student_result.dart';
 import '../services/firebase_service.dart';
 import '../services/omr_processor.dart';
+import '../services/sheet_perspective_warp.dart';
 
 class MarkerDetectionException implements Exception {
   final String message;
@@ -307,8 +308,6 @@ class _ScannerScreenState extends State<ScannerScreen>
     if (studentName.isEmpty == true) {
       _showSnackBar('please enter the student name first');
       return;
-    } else {
-      // continues execution
     }
 
     final CameraController? controller = _cameraController;
@@ -316,21 +315,17 @@ class _ScannerScreenState extends State<ScannerScreen>
     if (controller == null) {
       _showSnackBar('camera is not ready yet');
       return;
-    } else {
-      if (controller.value.isInitialized == false) {
-        _showSnackBar('camera is not ready yet');
-        return;
-      } else {
-        // continues execution
-      }
+    }
+
+    if (controller.value.isInitialized == false) {
+      _showSnackBar('camera is not ready yet');
+      return;
     }
 
     if (_hasReliableCorners == false) {
       throw const MarkerDetectionException(
         'cannot capture: four corner markers are not aligned yet',
       );
-    } else {
-      // continues execution
     }
 
     setState(() {
@@ -340,18 +335,27 @@ class _ScannerScreenState extends State<ScannerScreen>
     try {
       if (controller.value.isStreamingImages == true) {
         await controller.stopImageStream();
-      } else {
-        // continues execution
       }
 
       final XFile capturedPhoto = await controller.takePicture();
       final File imageToProcess = File(capturedPhoto.path);
-      await _processAndSave(studentName, imageToProcess);
+
+      final Size? latestFrameSize = _latestFrameSize;
+      final List<Offset>? detectedCorners = _detectedCorners;
+
+      File processedImage = imageToProcess;
+      if (latestFrameSize != null && detectedCorners != null) {
+        processedImage = await SheetPerspectiveWarper.warpCapturedSheet(
+          capturedFile: imageToProcess,
+          cornerPoints: detectedCorners,
+          frameSize: latestFrameSize,
+        );
+      }
+
+      await _processAndSave(studentName, processedImage);
 
       if (mounted == true) {
         await controller.startImageStream(_handleCameraFrame);
-      } else {
-        // continues execution
       }
     } on MarkerDetectionException catch (error) {
       _showSnackBar(error.message);
@@ -359,14 +363,8 @@ class _ScannerScreenState extends State<ScannerScreen>
         if (controller.value.isStreamingImages == false) {
           if (mounted == true) {
             await controller.startImageStream(_handleCameraFrame);
-          } else {
-            // continues execution
           }
-        } else {
-          // continues execution
         }
-      } else {
-        // continues execution
       }
     } catch (error) {
       _showSnackBar('scan failed: $error');
@@ -374,22 +372,14 @@ class _ScannerScreenState extends State<ScannerScreen>
         if (controller.value.isStreamingImages == false) {
           if (mounted == true) {
             await controller.startImageStream(_handleCameraFrame);
-          } else {
-            // continues execution
           }
-        } else {
-          // continues execution
         }
-      } else {
-        // continues execution
       }
     } finally {
       if (mounted == true) {
         setState(() {
           _isProcessing = false;
         });
-      } else {
-        // continues execution
       }
     }
   }
@@ -415,6 +405,17 @@ class _ScannerScreenState extends State<ScannerScreen>
       imageToProcess,
       totalQuestions,
     );
+
+    if (studentAnswers.isEmpty == true) {
+      _showSnackBar('scan failed, unable to read the answer sheet');
+      return;
+    }
+
+    if (studentAnswers.length != totalQuestions) {
+      _showSnackBar('scan failed, answer count did not match the exam');
+      return;
+    }
+
     int score = 0;
     final List<bool> analysis = <bool>[];
 

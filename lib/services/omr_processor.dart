@@ -27,8 +27,6 @@ class OMRProcessor {
   static List<int> processImage(img.Image originalImage, int totalQuestions) {
     if (totalQuestions <= 0) {
       return <int>[];
-    } else {
-      // continues execution
     }
 
     final img.Image grayscale = img.grayscale(originalImage);
@@ -40,21 +38,20 @@ class OMRProcessor {
     final int height = scaledImage.height;
     final List<int> luminance = _readLuminance(scaledImage);
     final int otsuThreshold = _calculateOtsuThreshold(luminance);
-    final int componentThreshold = otsuThreshold.clamp(90, 185).toInt();
+    final int componentThreshold = otsuThreshold.clamp(80, 200).toInt();
     
-    // constructs a binary mask to explicitly isolate dark ink from shadows
     final Uint8List darkMask = _buildDarkMask(luminance, componentThreshold);
     final List<_BubbleCandidate> candidates = _findBubbleCandidates(
       darkMask,
       width,
       height,
     );
-    final _DetectedGrid? grid = _detectGrid(candidates, totalQuestions);
+    
+    _DetectedGrid? grid = _detectGrid(candidates, totalQuestions);
 
+    // FIX 1: Fallback to the theoretical layout if dynamic detection fails
     if (grid == null) {
-      return List<int>.filled(totalQuestions, -1);
-    } else {
-      // continues execution
+      grid = _generateTheoreticalGrid();
     }
 
     final List<int> detectedAnswers = List<int>.filled(totalQuestions, -1);
@@ -67,15 +64,25 @@ class OMRProcessor {
 
         if (questionIndex >= totalQuestions) {
           continue;
-        } else {
-          if (colIndex >= row.groups.length) {
-            continue;
-          } else {
-            // continues execution
+        }
+
+        // FIX 2: Map bubble groups by X-coordinate to prevent column shifting
+        _BubbleGroup? group;
+        for (final _BubbleGroup g in row.groups) {
+          final double groupCenterX = g.bubbles.first.centerX;
+          if (colIndex == 0 && groupCenterX < width * 0.33) {
+            group = g;
+          } else if (colIndex == 1 && groupCenterX > width * 0.33 && groupCenterX < width * 0.66) {
+            group = g;
+          } else if (colIndex == 2 && groupCenterX > width * 0.66) {
+            group = g;
           }
         }
 
-        final _BubbleGroup group = row.groups[colIndex];
+        if (group == null) {
+          continue;
+        }
+
         final List<double> scores = <double>[];
 
         for (final _BubbleCandidate bubble in group.bubbles) {
@@ -87,6 +94,34 @@ class OMRProcessor {
     }
 
     return detectedAnswers;
+  }
+
+  // Add this helper method directly below processImage
+  static _DetectedGrid _generateTheoreticalGrid() {
+    const List<double> columnStarts = <double>[110.0, 410.0, 710.0];
+    const double firstRowY = 250.0;
+    const double rowGap = 46.0;
+    const double choiceGap = 31.0;
+    const double expectedDiameter = 18.0;
+
+    final List<_BubbleRow> rows = <_BubbleRow>[];
+    
+    for (int rowIndex = 0; rowIndex < _itemsPerColumn; rowIndex++) {
+      final List<_BubbleGroup> groups = <_BubbleGroup>[];
+      for (int colIndex = 0; colIndex < _columns; colIndex++) {
+        final List<_BubbleCandidate> bubbles = <_BubbleCandidate>[];
+        for (int choice = 0; choice < _choicesPerQuestion; choice++) {
+          bubbles.add(_BubbleCandidate(
+            centerX: columnStarts[colIndex] + (choice * choiceGap),
+            centerY: firstRowY + (rowIndex * rowGap),
+            diameter: expectedDiameter,
+          ));
+        }
+        groups.add(_BubbleGroup(bubbles: bubbles));
+      }
+      rows.add(_BubbleRow(centerY: firstRowY + (rowIndex * rowGap), groups: groups));
+    }
+    return _DetectedGrid(rows: rows);
   }
 
   static List<int> _readLuminance(img.Image image) {
@@ -187,7 +222,7 @@ class OMRProcessor {
     // adjusts morphological thresholds to account for explicit solid shading
     final int minSize = max(4, (width * 0.004).round());
     final int maxSize = max(60, (width * 0.08).round());
-    final int minArea = max(8, (width * 0.00001).round());
+    final int minArea = max(6, (width * 0.00001).round());
     final int maxArea = max(4000, (width * 0.05).round());
 
     for (int y = 0; y < height; y++) {
@@ -319,7 +354,7 @@ class OMRProcessor {
         bool hasBubbleArea;
         if (area >= minArea) {
           if (area <= maxArea) {
-            if (fillRatio >= 0.04) {
+            if (fillRatio >= 0.03) {
               hasBubbleArea = true;
             } else {
               hasBubbleArea = false;
@@ -679,7 +714,7 @@ class OMRProcessor {
     int height,
     _BubbleCandidate bubble,
   ) {
-    final double radius = max(3.0, bubble.diameter * 0.28);
+    final double radius = max(4.0, bubble.diameter * 0.34);
     final int minX = max(0, (bubble.centerX - radius).floor());
     final int maxX = min(width - 1, (bubble.centerX + radius).ceil());
     final int minY = max(0, (bubble.centerY - radius).floor());
@@ -748,17 +783,17 @@ class OMRProcessor {
 
     // safely adjusted thresholds for comparing explicit pixel masks over raw gradients
     bool isDarkEnough;
-    if (bestScore >= 0.25) {
+    if (bestScore >= 0.18) {
       isDarkEnough = true;
     } else {
       isDarkEnough = false;
     }
 
     bool isClearlyBest;
-    if (bestScore - secondBestScore >= 0.08) {
+    if (bestScore - secondBestScore >= 0.05) {
       isClearlyBest = true;
     } else {
-      if (bestScore >= secondBestScore * 1.25) {
+      if (bestScore >= secondBestScore * 1.18) {
         isClearlyBest = true;
       } else {
         isClearlyBest = false;
